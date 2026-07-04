@@ -24,8 +24,9 @@ macOS driver installed (search "CH340 macOS driver").
 ```bash
 python3 -m fordscope --backend elm327 --port /dev/cu.usbserial-XXXX --profile fusion2016 scan
 ```
-- The output starts with a `LIVE — UNVALIDATED (NEEDS ON-CAR CHECK)` banner. That is expected
-  and honest: the serial path has never touched an adapter before your run.
+- The output starts with the honest banner
+  `-- LIVE VEHICLE via elm327 :: UNVALIDATED backend (NEEDS ON-CAR CHECK) --`. That is expected:
+  the serial path has never touched an adapter before your run.
 - A working scan lists your modules (PCM, ABS, BCM, IPC…). That's your first real confirmation.
 
 Then try:

@@ -98,6 +98,17 @@ class CliTests(unittest.TestCase):
         # Silent fake bus -> every module reads as not present (honest, no fake data).
         self.assertIn("not present", out)
 
+    def test_first_run_doc_quotes_the_exact_live_banner(self):
+        # Drift guard: FIRST_RUN.md quotes the live banner so the user can match it
+        # byte-for-byte on-car. Keep the doc in lockstep with the real LIVE_BANNER --
+        # if the banner text changes, this fails until the doc is updated (the doc
+        # previously PARAPHRASED it, which this guards against recurring).
+        from fordscope.cli import LIVE_BANNER
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(repo_root, "FIRST_RUN.md")) as fh:
+            first_run = fh.read()
+        self.assertIn(LIVE_BANNER.format(backend="elm327"), first_run)
+
     def test_no_command_prints_help(self):
         code, out, _ = run()
         self.assertEqual(code, 1)

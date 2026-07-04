@@ -939,6 +939,21 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   forces the VIN section to raise, asserts the report still completes with `VIN: (unavailable)` AND a
   later section (`Trouble codes:` / P0143) present. Teeth are structural (patch-to-raise + assert-returns
   guards the try/except). +1 test → **441 green**.
+- **Iters 120–121** (grounded HOLDS, no commit) — Investigated fresh high-stakes surfaces and found
+  them correct AND comprehensively tested, so held rather than manufacture: (120) documented-invariant
+  coverage sweep — grepped every "must/never/atomic/immutable/not-fatal" invariant and spot-checked each
+  against a named guarding test (backup gate, atomic flush, snapshot atomicity, empty-seed, VIN, DTC
+  never-invent — all covered); (121) the As-Built checksum/format machinery (sum-to-zero, all edit
+  methods keep-valid, bounds/value errors, roundtrip) and the FeatureCoder incl. its honesty invariant
+  (`test_every_example_feature_is_flagged_unverified`) — all correct + tested. Aimed at where a serious
+  bug would hurt most (safety-critical write path); clean there is strong completeness evidence.
+- **Iter 122** (doc-accuracy + drift guard — on-car banner) — After 121, checked `FIRST_RUN.md` (the R8
+  first-run guide): genuinely good, but line 27 quoted the live banner in backticks (implying a literal)
+  as `LIVE — UNVALIDATED (NEEDS ON-CAR CHECK)` while the real banner (confirmed by running) is
+  `-- LIVE VEHICLE via elm327 :: UNVALIDATED backend (NEEDS ON-CAR CHECK) --`. Fixed the doc to the exact
+  string so the owner matches what they see on-car, and — per the iter-99 "guard the root cause" pattern
+  — added `test_first_run_doc_quotes_the_exact_live_banner` keeping the doc byte-exact with `LIVE_BANNER`
+  (fails if either drifts). +1 test → **442 green**.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the
