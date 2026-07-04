@@ -22,6 +22,7 @@ from .base import (
     CAN_MAX_CLASSIC_DLC,
     CAN_MAX_11BIT_ID,
     CAN_MAX_29BIT_ID,
+    close_port,
 )
 
 OPEN_COMMAND = b"O\r"
@@ -109,6 +110,7 @@ class SlcanTransport(Transport):
         if self._open:
             self.port.write(CLOSE_COMMAND)
         self._open = False
+        close_port(self.port)
 
     @property
     def is_open(self) -> bool:

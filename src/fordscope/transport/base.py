@@ -107,3 +107,18 @@ class Transport(ABC):
 
     def __exit__(self, *exc_info) -> None:
         self.close()
+
+
+def close_port(port) -> None:
+    """Close a duck-typed serial port if it supports close(), swallowing errors.
+
+    A concrete transport is handed a serial port it does not otherwise own a way to
+    release; its ``close()`` must deterministically close that fd rather than leaving
+    it to GC (else the webapp leaks one fd per connect/disconnect). Safe on injected
+    fakes / ports without a real fd (no-op if there's no ``close``)."""
+    close = getattr(port, "close", None)
+    if callable(close):
+        try:
+            close()
+        except Exception:
+            pass

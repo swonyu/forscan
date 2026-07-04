@@ -24,6 +24,7 @@ from .base import (
     CAN_MAX_CLASSIC_DLC,
     CAN_MAX_11BIT_ID,
     CAN_MAX_29BIT_ID,
+    close_port,
 )
 
 _PROMPT = 0x3E  # '>'
@@ -116,6 +117,7 @@ class Elm327Transport(Transport):
         self._open = False
         self._current_header = None
         self._rx_frames.clear()
+        close_port(self.port)
 
     @property
     def is_open(self) -> bool:

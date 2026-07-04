@@ -20,6 +20,7 @@ class FakeSerial:
     def __init__(self, rx: bytes = b"") -> None:
         self.written = bytearray()
         self._rx = bytearray(rx)
+        self.closed = False
 
     def write(self, data: bytes) -> int:
         self.written.extend(data)
@@ -32,6 +33,9 @@ class FakeSerial:
 
     def feed(self, data: bytes) -> None:
         self._rx.extend(data)
+
+    def close(self) -> None:
+        self.closed = True
 
 
 class CommandBuilderTests(unittest.TestCase):
@@ -86,6 +90,15 @@ class ParseResponseTests(unittest.TestCase):
 class TransportTests(unittest.TestCase):
     def test_is_a_transport(self):
         self.assertIsInstance(Elm327Transport(FakeSerial()), Transport)
+
+    def test_close_closes_the_underlying_port(self):
+        # close() must release the owned serial fd, not leave it to GC — else the
+        # webapp leaks one fd per connect/disconnect cycle.
+        port = FakeSerial()
+        t = Elm327Transport(port)
+        t.open()
+        t.close()
+        self.assertTrue(port.closed)
 
     def test_open_writes_init_sequence(self):
         port = FakeSerial()
