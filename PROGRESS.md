@@ -928,6 +928,17 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   `node --check` (parses), then Claude Preview drove all three — immediate banner `Connecting…`, happy
   path → `SIMULATED` banner, `fetch`-reject → the failure message; console clean. Structural regression
   guard added. +1 test → **440 green**. (Transient launch.json created for the run, removed after.)
+- **Iter 119** (health-report graceful-degradation — documented invariant was untested) — Investigated
+  the flagship one-click report's robustness: does one failing section kill the whole report? The CODE
+  is correctly robust — every section (VIN, calibration, readiness, DTCs, freeze, Mode 06, live stats)
+  is wrapped in its own `try/except Exception`, and the docstring promises "one failing section is noted,
+  not fatal." But the iter-108 lesson bit again: that documented CRITICAL property was UNtested — every
+  health_report test was happy-path. On a real car sections fail routinely (no Mode-09 calibration,
+  Mode 06 unsupported, a glitching read), so a refactor dropping one `try/except` would crash the
+  flagship output on real cars with a green suite. Added `test_health_report_survives_a_failing_section`:
+  forces the VIN section to raise, asserts the report still completes with `VIN: (unavailable)` AND a
+  later section (`Trouble codes:` / P0143) present. Teeth are structural (patch-to-raise + assert-returns
+  guards the try/except). +1 test → **441 green**.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the

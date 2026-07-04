@@ -117,6 +117,21 @@ class ControllerTests(unittest.TestCase):
         self.assertIn("P0143", report)
         self.assertIn("Freeze frame", report)
 
+    def test_health_report_survives_a_failing_section(self):
+        # Documented critical property: "one failing section is noted, not fatal."
+        # On a REAL car sections fail routinely (no Mode-09 calibration, Mode 06
+        # unsupported, a glitching VIN read), and the flagship report must STILL
+        # generate. Force the VIN section to raise and assert the report completes
+        # with VIN "(unavailable)" AND a later section still present.
+        from unittest import mock
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        with mock.patch.object(c, "vin", side_effect=Exception("bus glitch")):
+            report = c.health_report()  # must NOT raise
+        self.assertIn("VIN: (unavailable)", report)
+        self.assertIn("Trouble codes:", report)  # a later section still generated
+        self.assertIn("P0143", report)            # ...with real data
+
     def test_health_report_coaches_not_ready_monitors(self):
         # The demo has a not-ready monitor; the shareable report should not just list
         # it but tell the owner how to complete it (drive-cycle coach integrated).
