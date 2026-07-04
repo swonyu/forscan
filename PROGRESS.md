@@ -94,7 +94,10 @@ feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and 
       null→baseline), a live end-to-end smoke test (connect→poll→rows carry pid+value), and a
       structural test that the served page wires it. Visual pixels are well-formed SVG (node-
       confirmed); a literal browser eyeball is the one un-automated sliver [owner/preview].
-- [ ] R5 Mode 06 on-board monitoring test results (generic decode; TID meanings OEM — not invented)
+- [x] R5 Mode 06 on-board monitoring test results (iters 84–85, research-unblocked): `obd/mode06.py`
+      standardized MID→category table + `MonitorTest` (value/limits + pass/fail from the ECU's own
+      limits; TID raw/OEM-specific, not invented); `ObdClient.monitor_tests` + `controller.monitor_tests`
+      + `GET /api/monitor-tests`; demo seeds catalyst/O2 pass + EGR fail.
 
 ## Tooling
 - [x] `fordscope-build` skill (`.claude/skills/`) + project `CLAUDE.md`
@@ -608,3 +611,13 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   logic across 5 cases + a live end-to-end smoke test + a structural page test), not by claim. +1
   test. 396 green. Meanwhile the R3/R5 diagnostic-research re-run (Sonnet-max, 4 angles) is in flight
   to unblock those features.
+- **Research re-run SUCCEEDED** (Sonnet-max, 97 agents, 18 claims 3-vote-verified → 6 findings; no
+  rate-limit this time). Indexed → `docs/RESEARCH_2026-07-04_ford_diagnostics.md`. R5 UNBLOCKED (MID
+  standardized, TID/limits OEM); R3 PARTIAL (only EVAP drive cycle verified; Ford catalyst/HEGO
+  claims REFUTED); As-Built checksum mechanism confirmed (maps stay UNVERIFIED — verify on-car).
+- **Iters 84–85** — **R5 SHIPPED** (Mode 06). Engine (`obd/mode06.py`): standardized MID→category
+  table, `MonitorTest` with pass/fail from the ECU's own returned min/max (raw units, no OEM scaling
+  needed), TID kept raw/OEM-specific. Client `monitor_tests(mid)` + sim + `controller.monitor_tests`
+  sweep + `GET /api/monitor-tests`, demo catalyst/O2 pass + EGR fail. Honesty line straight from the
+  verified research: name the category, show value/limits/pass-fail, never fabricate a TID name or
+  verdict. +10 tests. 406 green.
