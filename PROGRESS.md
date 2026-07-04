@@ -552,3 +552,14 @@ feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and 
   value when the ECU declared more length bytes than it sent; now validated. +4 tests, RED-first. 386
   green. **21 real app bugs across 5 runs; 2 were gaps in my own fixes (the audit earns its keep); 6th
   run to re-audit the dropped honesty dimension + check convergence.**
+- **Iters 75–77** — 6th audit was **genuinely COMPLETE** (all 6 dims, 0 dropped — the honest script
+  verified) and still found **2 HIGH + 1 MED**: (75, HIGH) `FileBackupStore.save` mutated in-memory
+  BEFORE persisting, so a failed flush left `has_backup()==True` for a backup never written → write
+  wrongly permitted; now persists-before-commits. (76, HIGH) SecurityAccess treated an EMPTY seed
+  (`any(b'')==False`) as already-unlocked, skipping the key exchange; now an empty seed is rejected.
+  (77, MED) `dtc_states` collapsed a comms failure into an affirmative empty "all-clear"; now each
+  bucket carries `available` (negative response = real empty; comms failure = unavailable). +3 tests.
+  389 green. **24 real app bugs across 6 runs. STOPPING RULE: run 7 is the last general sweep — if it's
+  complete and returns only LOW/none, the safety cycle is converged; if it still throws HIGHs, STOP
+  general simulator-audits (diminishing returns; the HIGHs cluster in backup/SecurityAccess, some are
+  gaps in my own fixes) and pivot — the real remaining risk-reduction is the on-car run (R8), not round 8.**
