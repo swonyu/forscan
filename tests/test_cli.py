@@ -3,8 +3,9 @@ import contextlib
 import io
 import unittest
 
-from fordscope.cli import main, DEMO_VIN, open_backend, default_modules
+from fordscope.cli import main, DEMO_VIN, open_backend, default_modules, modules_for_profile
 from fordscope.transport import SlcanTransport, Elm327Transport
+from fordscope.ford import fusion_2016
 
 
 class FakeSerial:
@@ -123,6 +124,30 @@ class OpenBackendTests(unittest.TestCase):
     def test_live_backend_without_port_raises(self):
         with self.assertRaises(ValueError):
             open_backend("slcan", None)
+
+
+class ProfileTests(unittest.TestCase):
+    def test_modules_for_profile_fusion2016(self):
+        mods = modules_for_profile("fusion2016")
+        self.assertEqual(mods, fusion_2016.confirmed_modules())
+        self.assertEqual({m.name for m in mods}, {"PCM", "ABS", "RCM", "APIM", "IPC", "BCM"})
+
+    def test_modules_for_profile_generic_and_none(self):
+        self.assertEqual(modules_for_profile("generic"), default_modules())
+        self.assertIsNone(modules_for_profile(None))
+
+    def test_open_backend_applies_profile_over_demo(self):
+        _bus, modules, banner = open_backend("simulator", None, profile="fusion2016")
+        self.assertEqual({m.name for m in modules}, {"PCM", "ABS", "RCM", "APIM", "IPC", "BCM"})
+        self.assertIn("SIMULATED", banner)
+
+    def test_cli_scan_with_fusion_profile(self):
+        code, out, _ = run("--profile", "fusion2016", "scan")
+        self.assertEqual(code, 0)
+        self.assertIn("PCM", out)
+        # IPC (0x720) and RCM (0x737) are not in the demo bus -> shown not present.
+        self.assertIn("IPC", out)
+        self.assertIn("not present", out)
 
 
 if __name__ == "__main__":

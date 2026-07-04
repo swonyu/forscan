@@ -174,3 +174,9 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   fake-port live run, factory construction, missing-port + missing-pyserial error paths). Verified
   by running: simulator works, both live error paths clean (209 total, `Ran 209 tests … OK`).
   Software is now plug-in-ready; the only gap to a real truck is validating the serial path on-car.
+- **Iter 18** — Wired the 2016 Fusion profile into the CLI. `--profile generic|fusion2016`;
+  `modules_for_profile` + `open_backend(profile=...)` swap the scan/dtc module list to the verified
+  `fusion_2016.confirmed_modules()` (PCM/ABS/RCM/APIM/IPC/BCM). +4 tests; verified by running
+  (`--profile fusion2016 scan` walks the real Fusion addresses). So on your car:
+  `python -m fordscope --backend elm327 --port … --profile fusion2016 scan` (223 total,
+  `Ran 223 tests … OK`).

@@ -17,7 +17,7 @@ from .transport import SimulatorTransport, SlcanTransport, Elm327Transport
 from .isotp import IsoTpSocket, SimulatedIsoTpEcu, multiplex
 from .obd import SimulatedObdEcu, ObdClient
 from .uds import SimulatedUdsEcu, UdsDtc, STATUS_CONFIRMED
-from .ford import eleven_bit_module, AddressPair, TYPICAL_FORD_MODULES
+from .ford import eleven_bit_module, AddressPair, TYPICAL_FORD_MODULES, fusion_2016
 from .services import (
     scan_vehicle,
     format_scan_report,
@@ -85,6 +85,15 @@ def default_modules() -> List[AddressPair]:
     return [eleven_bit_module(addr, name=name) for name, addr in TYPICAL_FORD_MODULES.items()]
 
 
+def modules_for_profile(profile):
+    """Module list for a named vehicle profile, or None to use the backend default."""
+    if profile == "fusion2016":
+        return fusion_2016.confirmed_modules()
+    if profile == "generic":
+        return default_modules()
+    return None
+
+
 def _open_serial(port_name: str):
     """Open a real serial port via pyserial (only reached on a live backend)."""
     try:
@@ -96,14 +105,16 @@ def _open_serial(port_name: str):
     return serial.Serial(port_name, baudrate=115200, timeout=1.0)
 
 
-def open_backend(backend: str, port, *, port_factory=None):
+def open_backend(backend: str, port, *, port_factory=None, profile=None):
     """Return (transport, modules, banner) for the chosen backend.
 
     port_factory lets tests inject a fake serial port; production uses pyserial.
+    profile overrides the module list (e.g. 'fusion2016' = verified 2016 Fusion map).
     """
+    profile_modules = modules_for_profile(profile)
     if backend == "simulator":
-        bus, modules = build_demo_vehicle()
-        return bus, modules, BANNER
+        bus, demo = build_demo_vehicle()
+        return bus, (profile_modules if profile_modules is not None else demo), BANNER
     if port is None:
         raise ValueError(f"--port is required for the '{backend}' backend")
     opener = port_factory or _open_serial
@@ -115,7 +126,8 @@ def open_backend(backend: str, port, *, port_factory=None):
     else:  # pragma: no cover - argparse restricts choices
         raise ValueError(f"unknown backend {backend!r}")
     transport.open()
-    return transport, default_modules(), LIVE_BANNER.format(backend=backend)
+    modules = profile_modules if profile_modules is not None else default_modules()
+    return transport, modules, LIVE_BANNER.format(backend=backend)
 
 
 def _obd_client(bus) -> ObdClient:
@@ -138,6 +150,12 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="serial device for a live backend, e.g. /dev/tty.usbserial-XXXX",
     )
+    parser.add_argument(
+        "--profile",
+        default=None,
+        choices=["generic", "fusion2016"],
+        help="module profile for scan/dtc (fusion2016 = verified 2016 Fusion S map)",
+    )
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("scan", help="whole-car module identification scan")
     sub.add_parser("dtc", help="whole-car diagnostic trouble-code report")
@@ -157,7 +175,9 @@ def main(argv: Optional[List[str]] = None, *, port_factory=None) -> int:
         return 1
 
     try:
-        bus, modules, banner = open_backend(args.backend, args.port, port_factory=port_factory)
+        bus, modules, banner = open_backend(
+            args.backend, args.port, port_factory=port_factory, profile=args.profile
+        )
     except Exception as exc:  # bad backend / missing port / serial open failed
         print(f"error: {exc}", file=sys.stderr)
         return 2
