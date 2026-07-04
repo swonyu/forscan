@@ -52,6 +52,16 @@ class ControllerTests(unittest.TestCase):
         with self.assertRaises(NotConnectedError):
             c.scan()
 
+    def test_supported_pids_lists_named_data_pids(self):
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        rows = c.supported_pids()
+        names = {r["name"] for r in rows}
+        self.assertIn("Engine RPM", names)
+        self.assertIn("Engine coolant temperature", names)
+        self.assertTrue(all(r["decodable"] for r in rows))
+        self.assertNotIn(0x00, {r["pid"] for r in rows})  # meta PIDs filtered out
+
     def test_clear_dtcs_requires_connection(self):
         with self.assertRaises(NotConnectedError):
             FordScopeController().clear_dtcs()
@@ -131,6 +141,15 @@ class ServerTests(unittest.TestCase):
 
     def test_clear_dtc_before_connect_returns_409(self):
         status, _raw = self._req("POST", "/api/clear-dtc")
+        self.assertEqual(status, 409)
+
+    def test_supported_endpoint(self):
+        self._json("POST", "/api/connect", {"port": DEMO_PORT})
+        _s, j = self._json("GET", "/api/supported")
+        self.assertIn("0C", {p["hex"] for p in j["pids"]})  # RPM
+
+    def test_supported_before_connect_returns_409(self):
+        status, _raw = self._req("GET", "/api/supported")
         self.assertEqual(status, 409)
 
 

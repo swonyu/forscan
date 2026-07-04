@@ -260,6 +260,11 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   (incl. the continuation bit) + `ObdClient.supported_pids()` follows PID 0x00→0x20→… while the
   continuation bit is set. +5 tests incl. the range-follow (a 0x2F PID pulls in range 0x20). Engine
   layer only; wires into the Mac app next. 288 total, `Ran 288 tests … OK` (0.19s).
+- **Iter 32** — Wired supported-PIDs into the Mac app. `controller.supported_pids()` (named via
+  PID_TABLE, `decodable` flag, meta range-marker PIDs filtered) + `GET /api/supported` + a
+  "Supported PIDs" button that lists them as clickable chips; a click adds the PID to the live
+  dashboard input (point-and-click, no hex typing). +3 tests; verified by running (endpoint returns
+  05/0C/0D named). 291 total, `Ran 291 tests … OK`.
 - **Iter 27** — Completed adversarial review coverage (CLI + scan services, the last un-reviewed
   logic). **1 more real bug found & fixed test-first** (268 total green): `scan_module` /
   `scan_module_dtcs` only caught `UdsError`, but `IsoTpSocket` raises a separate `IsoTpError`

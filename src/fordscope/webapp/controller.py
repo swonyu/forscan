@@ -12,7 +12,10 @@ from typing import List, Optional
 
 from ..cli import open_backend
 from ..isotp import IsoTpSocket
-from ..obd import ObdClient, ObdError
+from ..obd import ObdClient, ObdError, PID_TABLE
+
+# Meta query PIDs (supported-PID range markers) — not user-facing data PIDs.
+_META_PIDS = {0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0, 0xE0}
 from ..services import (
     scan_vehicle,
     format_scan_report,
@@ -108,6 +111,23 @@ class FordScopeController:
     def vin(self) -> str:
         self._require()
         return self._obd().read_vin()
+
+    def supported_pids(self) -> list:
+        """Which data PIDs the ECU reports, each named if FordScope can decode it.
+        The meta range-marker PIDs (0x00/0x20/…) are omitted."""
+        self._require()
+        rows = []
+        for pid in self._obd().supported_pids():
+            if pid in _META_PIDS:
+                continue
+            d = PID_TABLE.get(pid)
+            rows.append({
+                "pid": pid,
+                "hex": f"{pid:02X}",
+                "name": d.name if d else f"PID {pid:02X}",
+                "decodable": d is not None,
+            })
+        return rows
 
     def clear_dtcs(self) -> None:
         """Clear stored trouble codes (OBD Mode 04) — a real mutating action; the

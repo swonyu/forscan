@@ -50,7 +50,9 @@ INDEX_HTML = """<!doctype html>
   <input id="livepids" value="0C,05,0D" size="18" title="comma-separated hex PIDs">
   <button onclick="startLive()">Start live</button>
   <button onclick="stopLive()">Stop</button>
+  <button onclick="showSupported()">Supported PIDs</button>
 </div>
+<div id="supported" class="row"></div>
 <table id="live"></table>
 <pre id="out"></pre>
 <script>
@@ -82,6 +84,13 @@ async function pollLive(){const pids=document.getElementById('livepids').value;
  t.innerHTML=(j.rows||[]).map(x=>'<tr><td>'+x.name+'</td><td>'+(x.value==null?'—':x.value+' '+x.unit)+'</td></tr>').join('');}
 function startLive(){stopLive();pollLive();liveTimer=setInterval(pollLive,1000);}
 function stopLive(){if(liveTimer){clearInterval(liveTimer);liveTimer=null;}}
+function addLive(hex){const i=document.getElementById('livepids');
+ const cur=i.value.split(',').map(s=>s.trim()).filter(Boolean);
+ if(!cur.includes(hex)){cur.push(hex);i.value=cur.join(',');}}
+async function showSupported(){const r=await fetch('/api/supported');const j=await r.json();
+ if(j.banner)setBanner(j.banner);const d=document.getElementById('supported');
+ if(j.error){d.textContent=j.error;return;}
+ d.innerHTML=(j.pids||[]).map(p=>'<button title="'+(p.decodable?'add to live dashboard':'no decoder yet')+'" onclick="addLive(\''+p.hex+'\')">'+p.hex+' '+p.name+'</button>').join('');}
 loadPorts();
 </script></body></html>"""
 
@@ -133,6 +142,8 @@ def _make_handler(controller: FordScopeController):
                     pids_str = parse_qs(u.query).get("pids", ["0C,05,0D"])[0]
                     pids = [int(p, 16) for p in pids_str.split(",") if p.strip()]
                     return self._json({"rows": controller.live(pids), "banner": controller.banner})
+                if u.path == "/api/supported":
+                    return self._json({"pids": controller.supported_pids(), "banner": controller.banner})
                 return self._json({"error": "not found"}, 404)
             except NotConnectedError as exc:
                 return self._json({"error": str(exc)}, 409)
