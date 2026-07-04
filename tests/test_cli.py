@@ -5,9 +5,12 @@ import os
 import tempfile
 import unittest
 
-from fordscope.cli import main, DEMO_VIN, open_backend, default_modules, modules_for_profile
+from fordscope.cli import (
+    main, DEMO_VIN, open_backend, default_modules, modules_for_profile,
+    _feature_coder_for, build_demo_vehicle,
+)
 from fordscope.transport import SlcanTransport, Elm327Transport
-from fordscope.ford import fusion_2016
+from fordscope.ford import fusion_2016, FeatureDefinition
 
 
 class FakeSerial:
@@ -281,6 +284,21 @@ class ProfileTests(unittest.TestCase):
         # RCM (0x737) and APIM (0x7D0) are not in the demo bus -> shown not present.
         self.assertIn("RCM", out)
         self.assertIn("not present", out)
+
+
+class FeatureBackupScopeTests(unittest.TestCase):
+    def test_backup_keys_are_module_scoped(self):
+        # Two features on DIFFERENT modules that reuse the same DID must NOT share a
+        # backup slot — else restore-feature would write one module's backup bytes
+        # into the other module (a corrupting write that still passes read-back).
+        bus, _ = build_demo_vehicle()
+        fa = FeatureDefinition(key="a", name="A", module="BCM", did=0xDE01,
+                               label="L", byte_index=0, nibble="high", options={"on": 1})
+        fb = FeatureDefinition(key="b", name="B", module="IPC", did=0xDE01,
+                               label="L", byte_index=0, nibble="high", options={"on": 1})
+        ka = _feature_coder_for(bus, fa).coder._key(0xDE01)
+        kb = _feature_coder_for(bus, fb).coder._key(0xDE01)
+        self.assertNotEqual(ka, kb)
 
 
 if __name__ == "__main__":

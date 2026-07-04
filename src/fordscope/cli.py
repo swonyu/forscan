@@ -200,7 +200,10 @@ def _feature_coder_for(bus, feature, *, store=None) -> FeatureCoder:
     addr = _FEATURE_MODULE_ADDR[feature.module]
     pair = eleven_bit_module(addr, name=feature.module)
     uds = UdsClient(IsoTpSocket(bus, tx_id=pair.request_id, rx_id=pair.response_id))
-    coder = AsBuiltCoder(uds, store or InMemoryBackupStore(), scope="cli")
+    # Scope backups by MODULE, not a flat "cli": two features on different modules
+    # that reuse the same DID number must not collide to one backup slot (which would
+    # make restore write the wrong module's bytes into a module).
+    coder = AsBuiltCoder(uds, store or InMemoryBackupStore(), scope=f"cli:{feature.module}")
     return FeatureCoder(coder, {feature.key: feature})
 
 
