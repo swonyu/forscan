@@ -153,7 +153,11 @@ def describe_dtc(code: str) -> DtcInfo:
         raise ValueError(f"malformed DTC code: {code!r}")
     system = _SYSTEMS[code[0]]
     manufacturer_specific = code[1] in ("1", "3")
-    subsystem = _P_SUBSYSTEMS.get(code[2]) if code[0] == "P" else None
+    # The _P_SUBSYSTEMS third-digit taxonomy is SAE J2012's *generic P0-family*
+    # grouping — it is NOT valid for manufacturer codes (P1/P3, where the OEM defines
+    # the whole code) nor for generic P2xxx (a different third-digit taxonomy). Assert
+    # a subsystem ONLY for P0xxx, else leave it None rather than fabricate a category.
+    subsystem = _P_SUBSYSTEMS.get(code[2]) if (code[0] == "P" and code[1] == "0") else None
     return DtcInfo(
         code=code,
         system=system,

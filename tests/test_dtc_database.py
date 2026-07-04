@@ -57,6 +57,15 @@ class FallbackHonestyTests(unittest.TestCase):
     def test_subsystem_only_for_powertrain(self):
         self.assertIsNone(describe_dtc("C0035").subsystem)
 
+    def test_no_fabricated_subsystem_for_manufacturer_or_p2_codes(self):
+        # The P0-family third-digit taxonomy is only valid for generic P0xxx codes.
+        # For manufacturer (P1/P3) and generic P2 codes it is invalid, so asserting
+        # it would fabricate a category next to the "no definition" disclaimer.
+        self.assertIsNone(describe_dtc("P1250").subsystem)  # Ford manufacturer code
+        self.assertIsNone(describe_dtc("P2270").subsystem)  # generic P2, diff taxonomy
+        # ...but a generic P0 code still gets its valid subsystem.
+        self.assertEqual(describe_dtc("P0143").subsystem, "Fuel and air metering")
+
     def test_malformed_code_raises(self):
         for bad in ("X0143", "P143", "P01433", ""):
             with self.assertRaises(ValueError):
