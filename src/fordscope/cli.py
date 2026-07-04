@@ -62,6 +62,9 @@ def build_demo_vehicle() -> Tuple[SimulatorTransport, List[AddressPair]]:
                 pids={0x0C: bytes([0x0F, 0xA0]), 0x05: bytes([90]), 0x0D: bytes([0x40])},
                 dtcs=["P0143"],
                 vin=DEMO_VIN,
+                # frozen snapshot captured when P0143 set: idling, warm, stopped
+                freeze_frame={0x0C: bytes([0x0F, 0xA0]), 0x05: bytes([85]), 0x0D: bytes([0x00])},
+                freeze_dtc="P0143",
             ),
             SimulatedUdsEcu(
                 dids={0xF190: DEMO_VIN.encode(), 0xF187: b"AB-1234-CD"},

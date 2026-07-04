@@ -131,6 +131,20 @@ class FordScopeController:
             })
         return rows
 
+    def freeze_frame(self, pids=None) -> dict:
+        """The freeze frame: the DTC that triggered it + frozen PID values."""
+        self._require()
+        obd = self._obd()
+        dtc = obd.freeze_frame_dtc()
+        rows = []
+        for pid in (pids or [0x04, 0x05, 0x0C, 0x0D, 0x11]):
+            try:
+                r = obd.freeze_frame(pid)
+                rows.append({"pid": pid, "name": r.name, "value": r.value, "unit": r.unit})
+            except (ObdError, KeyError, ValueError):
+                pass  # this PID isn't in the freeze frame -> omit
+        return {"dtc": dtc, "rows": rows}
+
     def log_csv(self, pids, samples: int = 10) -> str:
         """Capture ``samples`` fast readings of ``pids`` and return CSV text.
         (A burst capture; the CLI `log --interval` does timed drive logs.)"""

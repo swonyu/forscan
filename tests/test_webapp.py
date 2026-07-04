@@ -71,6 +71,15 @@ class ControllerTests(unittest.TestCase):
         c.connect(DEMO_PORT)
         c.clear_dtcs()  # no exception
 
+    def test_freeze_frame(self):
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        fr = c.freeze_frame()
+        self.assertEqual(fr["dtc"], "P0143")
+        vals = {r["name"]: r["value"] for r in fr["rows"]}
+        self.assertEqual(vals["Engine RPM"], 1000.0)
+        self.assertEqual(vals["Engine coolant temperature"], 45)  # frozen [85] - 40
+
     def test_log_csv(self):
         c = FordScopeController()
         c.connect(DEMO_PORT)
@@ -170,6 +179,16 @@ class ServerTests(unittest.TestCase):
 
     def test_log_before_connect_returns_409(self):
         status, _raw = self._req("GET", "/api/log?pids=0C&samples=2")
+        self.assertEqual(status, 409)
+
+    def test_freeze_endpoint(self):
+        self._json("POST", "/api/connect", {"port": DEMO_PORT})
+        _s, j = self._json("GET", "/api/freeze")
+        self.assertEqual(j["dtc"], "P0143")
+        self.assertTrue(any(r["name"] == "Engine RPM" for r in j["rows"]))
+
+    def test_freeze_before_connect_returns_409(self):
+        status, _raw = self._req("GET", "/api/freeze")
         self.assertEqual(status, 409)
 
 

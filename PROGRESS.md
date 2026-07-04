@@ -281,6 +281,11 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   value via the same decoders) + `freeze_frame_dtc()` (the DTC that triggered it, or None);
   `SimulatedObdEcu` freeze_frame/freeze_dtc seed + `_mode02` ([0x02,pid,frame]→[0x42,pid,frame,data]).
   +4 tests. Engine layer; wires into the Mac app next. 308 total, `Ran 308 tests … OK`.
+- **Iter 36** — Freeze-frame in the Mac app. `controller.freeze_frame()` (triggering DTC + frozen
+  PID rows, unsupported PIDs omitted) + `GET /api/freeze` + a "Freeze frame" button showing the
+  DTC and the frozen snapshot. Demo PCM seeded with a P0143 freeze frame (idling/warm/stopped).
+  +3 tests; verified by running (dtc P0143, coolant 45 / RPM 1000 / speed 0). 311 total,
+  `Ran 311 tests … OK`.
 - **Iter 27** — Completed adversarial review coverage (CLI + scan services, the last un-reviewed
   logic). **1 more real bug found & fixed test-first** (268 total green): `scan_module` /
   `scan_module_dtcs` only caught `UdsError`, but `IsoTpSocket` raises a separate `IsoTpError`

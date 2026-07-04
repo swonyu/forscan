@@ -43,6 +43,7 @@ INDEX_HTML = """<!doctype html>
   <button onclick="run('/api/scan')">Whole-car scan</button>
   <button onclick="run('/api/dtc')">Trouble codes</button>
   <button onclick="run('/api/vin')">VIN</button>
+  <button onclick="showFreeze()">Freeze frame</button>
   <button onclick="clearDtc()">Clear codes</button>
   <input id="pid" value="0C" size="4"><button onclick="readPid()">Read PID (hex)</button>
 </div>
@@ -71,6 +72,12 @@ async function run(url){const r=await fetch(url);const j=await r.json();if(j.ban
 async function readPid(){const pid=document.getElementById('pid').value;
  const r=await fetch('/api/read?pid='+encodeURIComponent(pid));const j=await r.json();
  document.getElementById('out').textContent=j.error?j.error:(j.name+': '+j.value+' '+j.unit);}
+async function showFreeze(){const r=await fetch('/api/freeze');const j=await r.json();
+ if(j.banner)setBanner(j.banner);
+ if(j.error){document.getElementById('out').textContent=j.error;return;}
+ let s='Freeze frame '+(j.dtc?'(triggered by '+j.dtc+')':'(no stored freeze frame)')+':\n';
+ s+=(j.rows||[]).map(x=>'  '+x.name+': '+x.value+' '+x.unit).join('\n');
+ document.getElementById('out').textContent=s;}
 async function clearDtc(){
  if(!confirm('Clear stored trouble codes? This also resets emissions readiness monitors.'))return;
  const r=await fetch('/api/clear-dtc',{method:'POST'});const j=await r.json();
@@ -157,6 +164,9 @@ def _make_handler(controller: FordScopeController):
                     return self._json({"rows": controller.live(pids), "banner": controller.banner})
                 if u.path == "/api/supported":
                     return self._json({"pids": controller.supported_pids(), "banner": controller.banner})
+                if u.path == "/api/freeze":
+                    fr = controller.freeze_frame()
+                    return self._json({**fr, "banner": controller.banner})
                 if u.path == "/api/log":
                     q = parse_qs(u.query)
                     pids = [int(p, 16) for p in q.get("pids", ["0C,05,0D"])[0].split(",") if p.strip()]
