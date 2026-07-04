@@ -103,6 +103,29 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 3)
         self.assertIn("error", err.lower())
 
+    def test_features_lists_examples_as_unverified(self):
+        code, out, _ = run("features")
+        self.assertEqual(code, 0)
+        self.assertIn("fog_drl", out)
+        self.assertIn("gauge_sweep", out)
+        self.assertIn("UNVERIFIED", out)
+
+    def test_read_feature_reports_off_and_warns(self):
+        code, out, _ = run("read-feature", "fog_drl")
+        self.assertEqual(code, 0)
+        self.assertIn("off", out)
+        self.assertIn("UNVERIFIED", out)
+
+    def test_read_feature_on_ipc_module(self):
+        code, out, _ = run("read-feature", "gauge_sweep")
+        self.assertEqual(code, 0)
+        self.assertIn("off", out)
+
+    def test_read_feature_unknown_key_errors(self):
+        code, _out, err = run("read-feature", "nope")
+        self.assertEqual(code, 3)
+        self.assertIn("unknown feature", err)
+
 
 class OpenBackendTests(unittest.TestCase):
     def test_simulator_returns_demo_and_simulated_banner(self):
@@ -145,8 +168,8 @@ class ProfileTests(unittest.TestCase):
         code, out, _ = run("--profile", "fusion2016", "scan")
         self.assertEqual(code, 0)
         self.assertIn("PCM", out)
-        # IPC (0x720) and RCM (0x737) are not in the demo bus -> shown not present.
-        self.assertIn("IPC", out)
+        # RCM (0x737) and APIM (0x7D0) are not in the demo bus -> shown not present.
+        self.assertIn("RCM", out)
         self.assertIn("not present", out)
 
 

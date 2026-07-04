@@ -180,3 +180,9 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   (`--profile fusion2016 scan` walks the real Fusion addresses). So on your car:
   `python -m fordscope --backend elm327 --port … --profile fusion2016 scan` (223 total,
   `Ran 223 tests … OK`).
+- **Iter 19** — As-Built CLI (read side). `features` lists the EXAMPLE features (loudly labeled
+  UNVERIFIED/demo); `read-feature <key>` reads a feature's current setting via a `FeatureCoder`
+  bound to the module, with an UNVERIFIED warning line. Demo BCM/IPC seeded with the example
+  As-Built blocks (+ an IPC module) so it runs end-to-end. +4 tests; verified by running.
+  Next (iter 20): `set-feature` with backup-file + `--confirm` + simulator-only guard (won't
+  write unverified maps to a live car). 227 total, `Ran 227 tests … OK`.

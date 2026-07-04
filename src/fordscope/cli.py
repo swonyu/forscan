@@ -16,8 +16,17 @@ from typing import List, Optional, Tuple
 from .transport import SimulatorTransport, SlcanTransport, Elm327Transport
 from .isotp import IsoTpSocket, SimulatedIsoTpEcu, multiplex
 from .obd import SimulatedObdEcu, ObdClient
-from .uds import SimulatedUdsEcu, UdsDtc, STATUS_CONFIRMED
-from .ford import eleven_bit_module, AddressPair, TYPICAL_FORD_MODULES, fusion_2016
+from .uds import SimulatedUdsEcu, UdsDtc, STATUS_CONFIRMED, UdsClient
+from .ford import (
+    eleven_bit_module,
+    AddressPair,
+    TYPICAL_FORD_MODULES,
+    fusion_2016,
+    AsBuiltCoder,
+    InMemoryBackupStore,
+    FeatureCoder,
+    EXAMPLE_FEATURES,
+)
 from .services import (
     scan_vehicle,
     format_scan_report,
@@ -59,17 +68,28 @@ def build_demo_vehicle() -> Tuple[SimulatorTransport, List[AddressPair]]:
         request_id=0x7E0,
         response_id=0x7E8,
     )
+    # BCM/IPC carry the EXAMPLE As-Built feature blocks (all "off"), so the
+    # As-Built CLI commands are demonstrable end-to-end on the simulator.
     bcm = SimulatedIsoTpEcu(
-        SimulatedUdsEcu(dids={0xF187: b"BCM-PART-01", 0xF194: b"v3.1"}),
+        SimulatedUdsEcu(dids={
+            0xF187: b"BCM-PART-01", 0xF194: b"v3.1",
+            0xDE01: bytes(4),  # fog_drl block  (byte2 high nibble = off)
+            0xDE02: bytes(2),  # double_honk block (byte0 low nibble = off)
+        }),
         request_id=0x726,
         response_id=0x72E,
+    )
+    ipc = SimulatedIsoTpEcu(
+        SimulatedUdsEcu(dids={0xF187: b"IPC-PART-7", 0xDE10: bytes(3)}),  # gauge_sweep (off)
+        request_id=0x720,
+        response_id=0x728,
     )
     abs_module = SimulatedIsoTpEcu(
         SimulatedUdsEcu(dids={0xF187: b"ABS-PART-9"}),
         request_id=0x760,
         response_id=0x768,
     )
-    bus = SimulatorTransport(multiplex(pcm, bcm, abs_module))
+    bus = SimulatorTransport(multiplex(pcm, bcm, ipc, abs_module))
     bus.open()
     modules = [
         eleven_bit_module(0x7E0, name="PCM"),
@@ -134,6 +154,26 @@ def _obd_client(bus) -> ObdClient:
     return ObdClient(IsoTpSocket(bus, tx_id=0x7E0, rx_id=0x7E8))
 
 
+# Module addresses used by the EXAMPLE As-Built features.
+_FEATURE_MODULE_ADDR = {"BCM": 0x726, "IPC": 0x720, "APIM": 0x7D0, "PCM": 0x7E0}
+
+
+def _feature_coder_for(bus, feature, *, store=None) -> FeatureCoder:
+    """A FeatureCoder bound to the feature's module over the given bus."""
+    addr = _FEATURE_MODULE_ADDR[feature.module]
+    pair = eleven_bit_module(addr, name=feature.module)
+    uds = UdsClient(IsoTpSocket(bus, tx_id=pair.request_id, rx_id=pair.response_id))
+    coder = AsBuiltCoder(uds, store or InMemoryBackupStore(), scope="cli")
+    return FeatureCoder(coder, {feature.key: feature})
+
+
+def print_features() -> None:
+    print("As-Built features (EXAMPLE / UNVERIFIED — demonstration mappings):")
+    for key, f in EXAMPLE_FEATURES.items():
+        print(f"  {key:12s} {f.name} [{f.module}]  options={sorted(f.options)}")
+    print("These are demo mappings. Real coding needs VERIFIED definitions or FORScan.")
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="fordscope", description="FordScope OBD-II / Ford enhanced diagnostics"
@@ -163,6 +203,9 @@ def _build_parser() -> argparse.ArgumentParser:
     read_p.add_argument("pid", help="PID in hex, e.g. 0C for engine RPM")
     sub.add_parser("vin", help="read the vehicle VIN")
     sub.add_parser("clear-dtc", help="clear stored DTCs")
+    sub.add_parser("features", help="list built-in As-Built features (EXAMPLE/UNVERIFIED)")
+    rf = sub.add_parser("read-feature", help="read a feature's current setting")
+    rf.add_argument("key", help="feature key, e.g. fog_drl")
     return parser
 
 
@@ -173,6 +216,11 @@ def main(argv: Optional[List[str]] = None, *, port_factory=None) -> int:
     if not args.command:
         parser.print_help()
         return 1
+
+    # 'features' is a static listing — no vehicle needed.
+    if args.command == "features":
+        print_features()
+        return 0
 
     try:
         bus, modules, banner = open_backend(
@@ -201,6 +249,18 @@ def main(argv: Optional[List[str]] = None, *, port_factory=None) -> int:
             _obd_client(bus).clear_dtcs()
             print(banner)
             print("DTCs cleared.")
+        elif args.command == "read-feature":
+            feature = EXAMPLE_FEATURES.get(args.key)
+            if feature is None:
+                raise ValueError(
+                    f"unknown feature {args.key!r}; try 'features' to list them"
+                )
+            _def, current = _feature_coder_for(bus, feature).read_feature(args.key)
+            print(banner)
+            print(f"{feature.name} [{feature.module}]: {current or 'unknown'}  "
+                  f"(options: {sorted(feature.options)})")
+            print("  ! EXAMPLE/UNVERIFIED mapping — demo only; confirm the real "
+                  "block before trusting this.")
     except Exception as exc:  # surface a clean message, non-zero exit
         print(f"error: {exc}", file=sys.stderr)
         return 3
