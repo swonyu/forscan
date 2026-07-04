@@ -172,7 +172,11 @@ class UdsClient:
             + bytes(control_state)
         )
         assert resp is not None
-        if len(resp) < 4 or resp[1] != hi or resp[2] != lo:
+        # The response must echo the DID (resp[1:3]) AND the control option (resp[3]);
+        # a mismatched control option means the ECU applied a different actuator mode
+        # than commanded — reject it (mirrors routine_control's sub-function echo check).
+        if (len(resp) < 4 or resp[1] != hi or resp[2] != lo
+                or resp[3] != (control_option & 0xFF)):
             raise UnexpectedResponseError("IOControl echo mismatch")
         return resp[4:]
 

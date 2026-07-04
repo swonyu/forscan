@@ -3,7 +3,7 @@ import unittest
 
 from fordscope.transport import SimulatorTransport
 from fordscope.isotp import IsoTpSocket, SimulatedIsoTpEcu
-from fordscope.uds import UdsClient, SimulatedUdsEcu, NegativeResponseError
+from fordscope.uds import UdsClient, SimulatedUdsEcu, NegativeResponseError, UnexpectedResponseError
 from fordscope.uds import services as S
 
 REQ_ID = 0x7E0
@@ -38,6 +38,22 @@ class IoControlTests(unittest.TestCase):
         with self.assertRaises(NegativeResponseError) as ctx:
             client.io_control(0x9999, S.IO_SHORT_TERM_ADJUSTMENT, b"\x01")
         self.assertEqual(ctx.exception.nrc, S.NRC_REQUEST_OUT_OF_RANGE)
+
+    def test_io_control_wrong_control_option_echo_rejected(self):
+        # ISO 14229 Table 168: the response's 4th byte must echo the requested
+        # control option. A response echoing a DIFFERENT actuator-control mode
+        # (0x02 freezeCurrentState vs the 0x03 shortTermAdjustment commanded) must
+        # be rejected — silently accepting it would confirm the wrong actuator mode.
+        class _Scripted:
+            def send(self, payload):
+                pass
+
+            def recv(self, timeout=1.0):
+                return bytes([0x6F, 0x12, 0x34, 0x02, 0x01])  # echoes 0x02, we sent 0x03
+
+        client = UdsClient(_Scripted())
+        with self.assertRaises(UnexpectedResponseError):
+            client.io_control(IO_DID, S.IO_SHORT_TERM_ADJUSTMENT, b"\x01")
 
 
 class RoutineControlTests(unittest.TestCase):
