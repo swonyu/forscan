@@ -277,6 +277,11 @@ class UdsClient:
         if len(resp) < 2:
             raise UnexpectedResponseError("malformed RequestDownload response")
         n = (resp[1] >> 4) & 0x0F
+        if n == 0 or len(resp) < 2 + n:
+            raise UnexpectedResponseError(
+                f"RequestDownload declared a {n}-byte maxNumberOfBlockLength but the "
+                f"response carries only {max(0, len(resp) - 2)}"
+            )
         return int.from_bytes(resp[2 : 2 + n], "big")
 
     def transfer_data(self, block_seq: int, data: bytes) -> bytes:

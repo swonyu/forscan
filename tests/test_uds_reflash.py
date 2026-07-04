@@ -8,7 +8,7 @@ import unittest
 
 from fordscope.transport import SimulatorTransport
 from fordscope.isotp import IsoTpSocket, SimulatedIsoTpEcu
-from fordscope.uds import UdsClient, SimulatedUdsEcu, NegativeResponseError
+from fordscope.uds import UdsClient, SimulatedUdsEcu, NegativeResponseError, UnexpectedResponseError
 from fordscope.uds import services as S
 
 
@@ -24,6 +24,19 @@ class RequestDownloadTests(unittest.TestCase):
     def test_returns_max_block_length(self):
         client, _ = make_uds(download_max_block=6)
         self.assertEqual(client.request_download(0x00801000, 100), 6)
+
+    def test_rejects_short_max_block_length(self):
+        # ECU declares a 2-byte maxNumberOfBlockLength but sends only 1 byte — must
+        # raise, not silently return the truncated (wrong) value.
+        class _Scripted:
+            def send(self, payload):
+                pass
+
+            def recv(self, timeout=1.0):
+                return bytes([0x74, 0x20, 0xFF])  # lengthFormatId high-nibble=2, 1 byte
+
+        with self.assertRaises(UnexpectedResponseError):
+            UdsClient(_Scripted()).request_download(0x1000, 0x100)
 
 
 class TransferTests(unittest.TestCase):
