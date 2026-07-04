@@ -124,6 +124,13 @@ class TesterPresentTests(unittest.TestCase):
         with self.assertRaises(NegativeResponseError):
             client.tester_present(suppress_response=True)
 
+    def test_suppressed_tester_present_ignores_response_pending(self):
+        # 0x78 (responsePending) is NOT a rejection — the ECU is busy but the session
+        # is alive. The keepalive probe must not tear a healthy session down.
+        sock = _RecordingSocket([bytes([0x7F, 0x3E, 0x78])])
+        client = UdsClient(sock)
+        client.tester_present(suppress_response=True)  # must NOT raise
+
 
 class UnsupportedServiceTests(unittest.TestCase):
     def test_unsupported_service_raises(self):

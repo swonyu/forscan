@@ -177,6 +177,8 @@ class UdsClient:
                     f"negative response SID 0x{resp[1]:02X} does not echo request "
                     f"SID 0x{TESTER_PRESENT:02X}"
                 )
+            if resp[2] == NRC_RESPONSE_PENDING:
+                return  # 0x78 = "busy, still working" — the session is alive, not rejected
             raise NegativeResponseError(resp[1], resp[2])
 
     # --- bidirectional controls -----------------------------------------
