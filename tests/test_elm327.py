@@ -15,7 +15,7 @@ from fordscope.transport import (
     parse_response_line,
 )
 from fordscope.isotp import IsoTpSocket
-from fordscope.obd import ObdClient
+from fordscope.obd import ObdClient, ObdError
 
 
 class ScriptedElmPort:
@@ -216,6 +216,16 @@ class Elm327EndToEndReadTests(unittest.TestCase):
             "7E8 21 48 4B 38 44 38 39 41\r7E8 22 42 41 31 32 33 34 35",
         ])
         self.assertEqual(obd.read_vin(), "1FMHK8D89ABA12345")
+
+    def test_no_data_surfaces_clean_error_not_a_hang(self):
+        # The #1 real-world event on a live car: query an unsupported PID and the
+        # adapter replies "NO DATA". The full stack (elm327 recognizes the status
+        # line -> None -> ISO-TP None -> ObdClient) must surface a clean ObdError so
+        # the GUI can say "no response" -- never hang or crash on the first drive.
+        obd = self._obd(["NO DATA"])
+        with self.assertRaises(ObdError) as ctx:
+            obd.current_data(0x0C)
+        self.assertIn("no response", str(ctx.exception))
 
 
 if __name__ == "__main__":

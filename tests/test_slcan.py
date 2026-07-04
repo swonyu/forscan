@@ -15,7 +15,7 @@ from fordscope.transport import (
     bitrate_command,
 )
 from fordscope.isotp import IsoTpSocket
-from fordscope.obd import ObdClient
+from fordscope.obd import ObdClient, ObdError
 
 
 class ScriptedSlcanPort:
@@ -252,6 +252,15 @@ class SlcanEndToEndReadTests(unittest.TestCase):
             "t7E8821484B3844383941\rt7E882242413132333435",
         ])
         self.assertEqual(obd.read_vin(), "1FMHK8D89ABA12345")
+
+    def test_silent_bus_surfaces_clean_error_not_a_hang(self):
+        # A module that never answers (silent CAN bus) -- the raw-CAN equivalent of
+        # elm327's "NO DATA". slcan recv sees no CR-terminated frame -> None -> the
+        # full stack must surface a clean ObdError, not hang, on the first drive.
+        obd = self._obd([])  # nothing queued: the ECU never responds
+        with self.assertRaises(ObdError) as ctx:
+            obd.current_data(0x0C)
+        self.assertIn("no response", str(ctx.exception))
 
 
 if __name__ == "__main__":

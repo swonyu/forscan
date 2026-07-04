@@ -840,6 +840,16 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   separator), and the empirical run surfaced it as an ISO-TP "SF truncated" before any test was
   written. Fixed the fixtures, re-verified, then committed. +2 tests → **431 green**. Both real
   backends now have full-stack composition coverage; slcan live timing remains NEEDS ON-CAR CHECK.
+- **Iter 111** (real-adapter ERROR path end-to-end — the #1 first-drive event) — iters 109/110 proved
+  the SUCCESS path; but on a real car the most COMMON event is an unsupported PID or a module that
+  never answers. Added the error-path composition tests both backends were missing: elm327 `NO DATA`
+  (the adapter's status line for "nothing answered") and slcan silent-bus (no CR-terminated frame
+  arrives — the raw-CAN equivalent). Verified empirically first: both surface a clean
+  `ObdError('no response to mode 0x01')` through the full stack (transport → ISO-TP None → ObdClient),
+  no hang, no crash. Locked as `test_no_data_surfaces_clean_error_not_a_hang` (elm327) +
+  `test_silent_bus_surfaces_clean_error_not_a_hang` (slcan). This is the robustness that decides
+  whether the GUI cleanly says "no response" or freezes on the first real query. +2 tests →
+  **433 green**.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the
