@@ -225,3 +225,10 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   no calibration data, deliberately NOT wired to the CLI (bricking risk); real reflash needs a
   programming session + security unlock + genuine FDRS calibration. +6 tests. 260 total,
   `Ran 260 tests … OK`. **The entire phased plan (Phases 1–3 + tooling) is now complete.**
+
+## Post-plan polish
+- **Iter 25** — README rewrite. Replaced the stale iteration-1 README ("early… transport layer")
+  with an accurate one: real command list (verified against `--help`), quick-start, the two
+  live backends (marked UNVALIDATED), and a prominent honesty-boundaries section (no on-car
+  validation, no emissions/immobilizer, SecurityAccess key not shipped, reflash protocol-only /
+  not CLI-exposed, As-Built examples UNVERIFIED). Docs only; suite unchanged at 260 green.
