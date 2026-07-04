@@ -678,6 +678,13 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   `showCalibration()` render — completing the Mode-09 vehicle-info readout. Verified BY RUNNING: suite
   green + `node --check` (JS still parses) + browser render confirmed ("ECU names: DEMO-ECM-EngineCtl").
   +1 assertion. 416 green. (Completion of a built-but-unwired method, not a manufactured feature.)
+- **Iter 96** — **CLI end-to-end verification by running** (the terminal analog of the iters 92–94
+  browser verification — the one integrated artifact I'd tested via `main()` but never actually run
+  this session). Ran the real `python -m fordscope` commands against the demo: `scan` (PCM/BCM with
+  VIN + part numbers), `dtc` (P0143 [confirmed]), `vin`, `read 0C` (RPM 1000), `ports` (honest
+  "no adapters found… Vgate vLinker FS"), `features` (loud EXAMPLE/UNVERIFIED label) — all correct,
+  exit 0 on success, every honesty label present in the REAL output. No bugs. **Both integrated
+  artifacts (browser UI + CLI) are now verified by running, not by claim.** No code change; 416 green.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the
