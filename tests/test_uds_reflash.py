@@ -54,6 +54,20 @@ class TransferTests(unittest.TestCase):
         self.assertEqual(blocks, 1)
         self.assertEqual(ecu.last_download[1], data)
 
+    def test_block_sequence_wraps_past_255(self):
+        # ISO 14229: the TransferData blockSequenceCounter starts at 0x01 and wraps
+        # 0xFF -> 0x00. A real module reflash is hundreds of KB, so ANY real transfer
+        # crosses that boundary -- yet nothing else here exceeds a few blocks. Force
+        # >255 one-byte blocks (max_block=3 -> chunk=max(1,3-2)=1) and require every
+        # byte to land in order across the wrap. Teeth: if the client's
+        # `seq = (seq+1) & 0xFF` OR the ECU's own wrap were wrong, block 256's counter
+        # mismatches and the ECU returns NRC_WRONG_BLOCK_SEQUENCE_COUNTER -> raises.
+        data = bytes((i * 37) & 0xFF for i in range(300))  # 300 blocks, distinctive
+        client, ecu = make_uds(download_max_block=3)
+        blocks = client.download(0x00801000, data)
+        self.assertEqual(blocks, 300)                       # 300 > 255 -> wrapped once
+        self.assertEqual(ecu.last_download, (0x00801000, data))  # byte-exact across wrap
+
 
 class TransferFailureTests(unittest.TestCase):
     def test_wrong_block_sequence(self):

@@ -726,6 +726,18 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   the request frames reassemble to the exact bytes sent. Proved teeth BY MEASUREMENT (not argument):
   neutralized the mask in a throwaway process — send-side raises `CF sequence number must be 0..15,
   got 16`, recv-side raises `IsoTpSequenceError` (expected_sn 16 vs on-wire 0). +1 test → **418 green**.
+- **Iter 101** (UDS reflash block-sequence wrap — untested safety-path boundary) — Audited the UDS
+  client (`uds/client.py`): well-hardened (negative-response SID echo, responsePending 0x78 bound +
+  P2* escalation, empty-seed rejection, DID/control-option echo checks all present & tested). Found
+  the same untested-boundary class as iter 100 in the reflash path: `download()` wraps the TransferData
+  blockSequenceCounter `seq = (seq+1) & 0xFF` (0xFF→0x00 per ISO 14229) and the ECU sim validates
+  against its OWN `& 0xFF`-wrapped `_dl_seq` — but every reflash test topped out at 3 blocks, so
+  **nothing crossed 255**, even though ANY real module reflash (hundreds of KB) does. Added
+  `test_block_sequence_wraps_past_255`: forces 300 one-byte blocks (`download_max_block=3` → chunk 1)
+  and requires byte-exact landing across the wrap. Ran it (PASS → wrap correct end-to-end, now guarded)
+  and proved teeth BY MEASUREMENT: neutralizing the ECU-side `& 0xFF` makes block 256 fail with
+  `0x73 wrongBlockSequenceCounter`. +1 test → **419 green**. (Reflash stays protocol-only / not
+  CLI-exposed — this hardens correctness of code that already exists, no new surface.)
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the
