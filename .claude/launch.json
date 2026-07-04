@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "fordscope-webapp",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd /Users/saleh/fordscope && PYTHONPATH=src python3 -c 'from fordscope.webapp.server import run; run(open_browser=False)'"],
+      "port": 8737
+    }
+  ]
+}

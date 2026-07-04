@@ -655,6 +655,15 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   layers (which were always tested-green) — the *integrated browser rendering* was broken until now.
   Lesson recorded: verify the integrated artifact (parse/launch the actual page), not just the pieces.
   +2 tests incl. a raw-string regression guard. 416 green.
+- **Iter 93** — **Browser end-to-end verification** (the integrated-artifact check I owed after the
+  iter-92 JS fix). Launched the real webapp via the Claude Preview tools (`.claude/launch.json`,
+  headless) and drove the actual DOM: page renders with ALL buttons (incl. the iter-92 additions),
+  **zero console errors** (the `<script>` now parses AND runs), Connect→**Monitor tests** ran the
+  click handler and rendered the exact demo data (catalyst PASS, EGR FAIL), and **Start live →
+  pollLive built history → the R4 sparklines rendered** (`<svg class="spark"><polyline …>`, 3 rows).
+  So the browser dashboard — dead since it was written until iter 92 — is now VERIFIED working by
+  running the actual page, not by claim. Added `.claude/launch.json` for repeatable preview runs.
+  Lesson closed: the integrated artifact is verified only by launching it. No code change; 416 green.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the
