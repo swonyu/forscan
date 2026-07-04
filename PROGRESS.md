@@ -24,8 +24,9 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
 - [x] 1.4 PID decode table: 16 common PIDs (RPM/coolant/MAF/MAP/fuel-trims/speed/throttle/…) with units
 - [x] 1.5 DTC read/clear (in 1.3) + DTC-definition database: curated generic table + structural
       fallback that flags uncurated/manufacturer codes instead of inventing a meaning
-- [ ] 2.1 Ford enhanced module map + 29-bit addressing (PCM/TCM/ABS/BCM/IPC/APIM/RCM…)
-- [ ] 2.2 ReadDataByIdentifier (0x22) across modules
+- [x] 2.1 Ford enhanced addressing: 11-bit (legislated + Ford +8) and 29-bit normal-fixed
+      (0x18DA{TA}{SA}/0x18DAF1{TA}, 0x18DB33F1). Math authoritative; module address map caveated.
+- [ ] 2.2 ReadDataByIdentifier (0x22) across modules (multi-module whole-car walk)
 - [ ] 3.1 Bidirectional: IOControl (0x2F) + RoutineControl (0x31) scaffolding
 - [ ] 3.2 Whole-car scan → health report
 - [ ] 3.3 CLI + live dashboard + CSV/SQLite logging
@@ -85,3 +86,10 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   .read_dtcs_described`. +8 tests incl. the honesty case (uncurated P0199/manufacturer P1234 get
   no invented meaning) (102 total, `Ran 102 tests … OK`). Phase 1 generic surface complete; next:
   Ford enhanced module addressing (Phase 1 §2.1).
+- **Iter 7** — Ford enhanced addressing (`ford/addressing.py`): 11-bit (`legislated_obd_pair`,
+  `eleven_bit_module` +8, `ford_module`) and 29-bit normal-fixed (`extended_module`
+  0x18DA{TA}{SA}/0x18DAF1{TA}, `extended_functional_request_id` 0x18DB33F1). `TYPICAL_FORD_MODULES`
+  map is explicitly non-authoritative (confirm on-vehicle). +12 tests incl. a 29-bit UDS
+  end-to-end (transport→ISO-TP→UDS on 0x18DA72F1). Two fixture bugs self-caught: passed the
+  11-bit id 0x720 where a 29-bit target *byte* was required — the byte-range validation rejected
+  it; fixed the fixtures, not the assertions (114 total, `Ran 114 tests … OK`).
