@@ -37,9 +37,11 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
       logging deferred as optional follow-up — core CLI shipped)
 
 ## Phase 2 — As-Built coding (Tier 4)
-- [ ] 4.1 Backup-before-write engine (persist original block, one-click restore)
-- [ ] 4.2 As-Built read + decode
-- [ ] 4.3 Guarded write with read-back verify + rollback
+- [x] 4.1 Backup-before-write engine (`ford/asbuilt.py`): `AsBuiltCoder` refuses writes without a
+      captured backup; `InMemoryBackupStore` + durable `FileBackupStore`; one-click `restore_block`
+- [ ] 4.2 As-Built read + decode (block/sub-block byte layout, Ford As-Built format)
+- [x] 4.3 Guarded write with read-back verify + rollback (in 4.1: `write_block` verifies,
+      `restore_block` rolls back; `VerificationError` on mismatch)
 
 ## Phase 3 — Reflashing (Tier 5, gated)
 - [ ] 5.1 Flashing state machine (0x27/0x34/0x36/0x37), stubbed — needs FDRS keys/calibrations
@@ -121,3 +123,10 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   connection. +9 tests AND a live run (scan/dtc/read/vin/backend-guard all verified by execution).
   **Phase 1 (Tiers 0–3) core complete.** 141 total, `Ran 141 tests … OK`. Next: **Phase 2 —
   As-Built coding** (4.1 backup-before-write engine).
+- **Iter 12** — Phase 2 As-Built coding engine (`ford/asbuilt.py`). `AsBuiltCoder` enforces the
+  safety invariant: `write_block` raises `BackupRequiredError` (and makes NO change) unless a
+  backup exists; `code_block` = backup→write→read-back-verify; `restore_block` rolls back;
+  `VerificationError` on read-back mismatch. `InMemoryBackupStore` + durable `FileBackupStore`
+  (survives sessions). Enters extended session before writes; SecurityAccess still NEEDS ON-CAR
+  CHECK. +10 tests incl. adversarial: refusal-makes-no-change + a CorruptingUdsEcu proving
+  read-back verify fires (151 total, `Ran 151 tests … OK`). Next: 4.2 As-Built block decode.

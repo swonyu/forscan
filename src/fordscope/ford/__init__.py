@@ -12,6 +12,15 @@ from .addressing import (
     extended_functional_request_id,
     ford_module,
 )
+from .asbuilt import (
+    AsBuiltCoder,
+    InMemoryBackupStore,
+    FileBackupStore,
+    AsBuiltError,
+    BackupRequiredError,
+    VerificationError,
+    NoBackupError,
+)
 
 __all__ = [
     "AddressPair",
@@ -24,4 +33,11 @@ __all__ = [
     "extended_module",
     "extended_functional_request_id",
     "ford_module",
+    "AsBuiltCoder",
+    "InMemoryBackupStore",
+    "FileBackupStore",
+    "AsBuiltError",
+    "BackupRequiredError",
+    "VerificationError",
+    "NoBackupError",
 ]
