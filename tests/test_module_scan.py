@@ -1,7 +1,7 @@
 """Whole-car module scan tests over a multi-module simulated bus."""
 import unittest
 
-from fordscope.transport import SimulatorTransport, CanFrame
+from fordscope.transport import SimulatorTransport, CanFrame, Elm327Transport
 from fordscope.isotp import (
     SimulatedIsoTpEcu,
     multiplex,
@@ -102,6 +102,57 @@ class MidTransferFaultTests(unittest.TestCase):
         self.assertEqual(infos["BCM"].identifiers, {})
         self.assertTrue(infos["ABS"].present)
         self.assertEqual(infos["ABS"].text("Spare part number"), "ABS-9")
+
+
+class RealBackendScanTests(unittest.TestCase):
+    """The flagship whole-car scan proven over a REAL backend (elm327/vLinker FS),
+    not the simulator: it must mark a responding module PRESENT and a silent one
+    ABSENT in ONE scan. This exercises the subtle correctness the simulator can't --
+    that an adapter's "NO DATA" maps to UdsError -> not-present (so the scan neither
+    crashes nor mis-reports an absent module as present) through the real wire codec."""
+
+    class RoutingElmPort:
+        """Routes replies by the current ATSH header, so one scan sees a real reply
+        for one module and "NO DATA" (absent) for another."""
+
+        def __init__(self, by_header):
+            self._map = by_header
+            self._current = None
+            self._armed = None
+
+        def write(self, data):
+            text = bytes(data).decode("ascii", "ignore").strip().upper()
+            if text.startswith("ATSH"):
+                self._current = text[4:]
+            elif text and not text.startswith("AT"):
+                self._armed = self._map.get(self._current, "NO DATA")
+            return len(data)
+
+        def read(self, size=1):
+            if self._armed is not None:
+                block, self._armed = self._armed, None
+                return (block + "\r>").encode("ascii")
+            return b">"
+
+        def close(self):
+            pass
+
+    def test_scan_over_elm327_marks_present_and_absent(self):
+        modules = [eleven_bit_module(0x7E0, name="PCM"), eleven_bit_module(0x7E1, name="TCM")]
+        # PCM (header 7E0) answers RDBI F190 -> "123"; TCM (header 7E1) is silent.
+        port = self.RoutingElmPort({
+            "7E0": "7E8 06 62 F1 90 31 32 33 00",
+            "7E1": "NO DATA",
+        })
+        t = Elm327Transport(port)
+        t.open()
+        infos = {m.name: m for m in scan_vehicle(t, modules, timeout=0.2)}
+        self.assertTrue(infos["PCM"].present)
+        self.assertEqual(infos["PCM"].text("VIN"), "123")
+        self.assertFalse(infos["TCM"].present)   # NO DATA -> UdsError -> absent, not a crash
+        report = format_scan_report(list(infos.values()))
+        self.assertIn("[OK] PCM", report)
+        self.assertIn("[--] TCM", report)
 
 
 if __name__ == "__main__":

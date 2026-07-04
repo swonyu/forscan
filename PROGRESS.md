@@ -862,6 +862,16 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   elm327 only — it's the owner's vLinker FS and carries the trickier multi-token parse; slcan's
   extended form is a simpler single 8-hex token already unit-tested (replicating there = padding).
   +1 test → **434 green**. (Live 29-bit handshake stays NEEDS ON-CAR CHECK.)
+- **Iter 113** (flagship whole-car scan proven over a REAL backend — present/absent) — Checked whether
+  the scan was truly "implied" by the per-module tests: it probes via `UdsClient.read_data_by_identifier`
+  and classifies present (any answer) vs absent (all raise `UdsError`), so a real-backend scan's
+  correctness hinges on a subtle mapping the simulator can't exercise — elm327 `NO DATA` must become a
+  `UdsError` so an absent module is marked absent, not crash the scan or mis-report it present. Verified
+  empirically then added `RealBackendScanTests.test_scan_over_elm327_marks_present_and_absent`: a
+  header-routing fake vLinker-FS answers RDBI for PCM (header 7E0 → VIN "123") and `NO DATA` for TCM
+  (7E1); `scan_vehicle` correctly reports `[OK] PCM` + `[--] TCM` in one scan. Proves the flagship
+  user action (whole-car scan) over the real wire codec, exercising the mixed present+absent
+  distinction never covered before. +1 test → **435 green**.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the
