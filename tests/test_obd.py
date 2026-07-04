@@ -12,6 +12,7 @@ from fordscope.obd import (
     encode_dtc,
     decode_dtcs,
     decode_supported_pids,
+    decode_monitor_status,
     ObdClient,
     ObdNegativeResponse,
     SimulatedObdEcu,
@@ -97,6 +98,42 @@ class ExtendedPidDecodeTests(unittest.TestCase):
     def test_short_data_raises(self):
         with self.assertRaises(ValueError):
             decode_pid(0x0C, bytes([0x0F]))  # RPM needs 2 bytes
+
+
+class MonitorStatusTests(unittest.TestCase):
+    def test_ready_all_supported_complete(self):
+        # A=00 MIL off/0 DTC; B=07 continuous supported+complete; C=01 catalyst
+        # supported; D=00 catalyst complete.
+        ms = decode_monitor_status(bytes([0x00, 0x07, 0x01, 0x00]))
+        self.assertFalse(ms.mil_on)
+        self.assertEqual(ms.dtc_count, 0)
+        self.assertFalse(ms.compression_ignition)
+        self.assertTrue(ms.monitors["Catalyst"]["supported"])
+        self.assertTrue(ms.monitors["Catalyst"]["complete"])
+        self.assertTrue(ms.ready)
+        self.assertEqual(ms.not_ready, [])
+
+    def test_incomplete_monitor_makes_not_ready(self):
+        # A=81 MIL on/1 DTC; C=01 catalyst supported; D=01 catalyst INCOMPLETE.
+        ms = decode_monitor_status(bytes([0x81, 0x07, 0x01, 0x01]))
+        self.assertTrue(ms.mil_on)
+        self.assertEqual(ms.dtc_count, 1)
+        self.assertFalse(ms.monitors["Catalyst"]["complete"])
+        self.assertEqual(ms.not_ready, ["Catalyst"])
+        self.assertFalse(ms.ready)
+
+    def test_compression_ignition_uses_diesel_monitor_names(self):
+        ms = decode_monitor_status(bytes([0x00, 0x08, 0x01, 0x00]))  # B bit3 = compression
+        self.assertTrue(ms.compression_ignition)
+        self.assertIn("NMHC catalyst", ms.monitors)
+
+    def test_short_data_raises(self):
+        with self.assertRaises(ValueError):
+            decode_monitor_status(bytes([0x00, 0x00]))
+
+    def test_client_reads_monitor_status(self):
+        client, _ = make_obd(pids={0x01: bytes([0x00, 0x07, 0x01, 0x00])})
+        self.assertTrue(client.monitor_status().ready)
 
 
 class FreezeFrameTests(unittest.TestCase):

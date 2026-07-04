@@ -286,6 +286,11 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   DTC and the frozen snapshot. Demo PCM seeded with a P0143 freeze frame (idling/warm/stopped).
   +3 tests; verified by running (dtc P0143, coolant 45 / RPM 1000 / speed 0). 311 total,
   `Ran 311 tests … OK`.
+- **Iter 37** — I/M readiness / monitor status (Mode 01 PID 0x01). `decode_monitor_status` →
+  `MonitorStatus` (mil_on, dtc_count, compression_ignition, per-monitor supported/complete, plus
+  `.ready`/`.not_ready`); spark vs compression monitor name sets; complete == supported and not
+  the *incomplete* bit (the inversion, tested). `ObdClient.monitor_status()`. +5 tests hand-derived.
+  Engine layer; wires into the Mac app next ("will it pass inspection?"). 316 total, `Ran 316 … OK`.
 - **Iter 27** — Completed adversarial review coverage (CLI + scan services, the last un-reviewed
   logic). **1 more real bug found & fixed test-first** (268 total green): `scan_module` /
   `scan_module_dtcs` only caught `UdsError`, but `IsoTpSocket` raises a separate `IsoTpError`

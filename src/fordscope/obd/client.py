@@ -7,7 +7,14 @@ vehicle info (VIN). Positive response = request mode + 0x40; negative response
 from __future__ import annotations
 
 from ..isotp.socket import IsoTpSocket
-from .pids import PidResult, decode_pid, decode_dtc, decode_dtcs, decode_supported_pids
+from .pids import (
+    PidResult,
+    decode_pid,
+    decode_dtc,
+    decode_dtcs,
+    decode_supported_pids,
+    decode_monitor_status,
+)
 from .dtc_database import DtcInfo, describe_dtc
 
 MODE_CURRENT_DATA = 0x01
@@ -61,6 +68,13 @@ class ObdClient:
         if len(resp) < 2 or resp[1] != (pid & 0xFF):
             raise ObdError("PID echo mismatch in Mode 01 response")
         return decode_pid(pid, resp[2:])
+
+    def monitor_status(self):
+        """Mode 01 PID 0x01: I/M readiness — MIL, DTC count, monitor completeness."""
+        resp = self._request(bytes([MODE_CURRENT_DATA, 0x01]))
+        if len(resp) < 6 or resp[1] != 0x01:
+            raise ObdError("monitor-status echo mismatch")
+        return decode_monitor_status(resp[2:6])
 
     def freeze_frame(self, pid: int, frame: int = 0) -> PidResult:
         """Mode 02: read one PID's frozen value from a freeze frame."""

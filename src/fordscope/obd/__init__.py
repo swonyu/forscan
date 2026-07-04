@@ -9,6 +9,8 @@ from .pids import (
     encode_dtc,
     decode_dtcs,
     decode_supported_pids,
+    decode_monitor_status,
+    MonitorStatus,
 )
 from .client import ObdClient, ObdError, ObdNegativeResponse
 from .simulated_ecu import SimulatedObdEcu
@@ -23,6 +25,8 @@ __all__ = [
     "encode_dtc",
     "decode_dtcs",
     "decode_supported_pids",
+    "decode_monitor_status",
+    "MonitorStatus",
     "ObdClient",
     "ObdError",
     "ObdNegativeResponse",

@@ -167,6 +167,60 @@ def encode_dtc(code: str) -> bytes:
     return bytes([a, b])
 
 
+# --- I/M readiness / monitor status (Mode 01 PID 0x01) ------------------
+_CONTINUOUS_MONITORS = ("Misfire", "Fuel system", "Components")
+_SPARK_MONITORS = (
+    "Catalyst", "Heated catalyst", "Evaporative system", "Secondary air system",
+    "A/C refrigerant", "Oxygen sensor", "Oxygen sensor heater", "EGR system",
+)
+_COMPRESSION_MONITORS = (
+    "NMHC catalyst", "NOx/SCR aftertreatment", "reserved", "Boost pressure",
+    "reserved", "Exhaust gas sensor", "PM filter", "EGR/VVT system",
+)
+
+
+@dataclass(frozen=True)
+class MonitorStatus:
+    mil_on: bool
+    dtc_count: int
+    compression_ignition: bool
+    monitors: dict  # name -> {"supported": bool, "complete": bool}
+
+    @property
+    def not_ready(self) -> list:
+        return [n for n, m in self.monitors.items() if m["supported"] and not m["complete"]]
+
+    @property
+    def ready(self) -> bool:
+        """True when every SUPPORTED monitor has completed (inspection-ready)."""
+        return not self.not_ready
+
+
+def decode_monitor_status(data: bytes) -> MonitorStatus:
+    """Decode Mode 01 PID 0x01 (monitor status since DTCs cleared).
+
+    Byte A: bit7 = MIL, bits6-0 = DTC count. Byte B: bits0-2 = continuous monitors
+    supported, bit3 = compression ignition, bits4-6 = continuous monitors *incomplete*.
+    Byte C = non-continuous supported, byte D = non-continuous *incomplete*
+    (a set bit means NOT complete). complete == supported and not incomplete.
+    """
+    if len(data) < 4:
+        raise ValueError(f"monitor status needs 4 bytes, got {len(data)}")
+    a, b, c, d = data[0], data[1], data[2], data[3]
+    monitors = {}
+    for i, name in enumerate(_CONTINUOUS_MONITORS):
+        supported = bool(b & (1 << i))
+        incomplete = bool(b & (1 << (i + 4)))
+        monitors[name] = {"supported": supported, "complete": supported and not incomplete}
+    compression = bool(b & 0x08)
+    names = _COMPRESSION_MONITORS if compression else _SPARK_MONITORS
+    for i, name in enumerate(names):
+        supported = bool(c & (1 << i))
+        incomplete = bool(d & (1 << i))
+        monitors[name] = {"supported": supported, "complete": supported and not incomplete}
+    return MonitorStatus(bool(a & 0x80), a & 0x7F, compression, monitors)
+
+
 def decode_supported_pids(base: int, data: bytes) -> list[int]:
     """Decode a Mode 01 supported-PIDs bitmask (PID 0x00/0x20/... response).
 
