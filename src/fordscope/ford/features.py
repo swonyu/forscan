@@ -33,6 +33,11 @@ class FeatureDefinition:
     note: str = ""           # provenance / caveat
 
     def _read_value(self, block: AsBuiltBlock) -> int:
+        if not 0 <= self.byte_index < len(block.data):
+            raise IndexError(
+                f"byte index {self.byte_index} out of range for "
+                f"{len(block.data)}-byte block {block.label!r}"
+            )
         b = block.data[self.byte_index]
         if self.nibble == "high":
             return (b >> 4) & 0x0F

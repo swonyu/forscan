@@ -65,6 +65,15 @@ class BlockTests(unittest.TestCase):
         self.assertEqual(lo.data[0], 0xA5)
         self.assertTrue(lo.is_valid)
 
+    def test_set_nibble_out_of_range_index_raises_clear_error(self):
+        # set_nibble must validate the index BEFORE reading data (defense-in-depth
+        # on the write path), with the same clear message as set_byte — not the
+        # generic raw-indexing "index out of range".
+        block = parse_block(LABEL, bytes([0x00, 0x00]))  # 1 data byte
+        with self.assertRaises(IndexError) as ctx:
+            block.set_nibble(5, high=True, value=3)
+        self.assertIn("byte index 5", str(ctx.exception))
+
     def test_nibble_value_validated(self):
         block = parse_block(LABEL, bytes([0x00, 0x00]))
         with self.assertRaises(ValueError):

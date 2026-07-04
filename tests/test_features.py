@@ -46,6 +46,17 @@ class FeatureDefinitionTests(unittest.TestCase):
         self.assertEqual((applied.data[2] >> 4) & 0x0F, 0x4)
         self.assertTrue(applied.is_valid)
 
+    def test_read_value_rejects_out_of_range_byte_index(self):
+        # A negative byte_index silently read the WRONG byte and returned it as the
+        # feature's value (audit finding #5). It must raise, not fabricate a value.
+        block = parse_block("726-01-01", block_with_high_nibble(0x4))
+        bad = FeatureDefinition(
+            key="bad", name="Bad", module="BCM", did=DID, label="726-01-01",
+            byte_index=-1, nibble=None, options={"x": 0x00},
+        )
+        with self.assertRaises(IndexError):
+            bad._read_value(block)
+
     def test_apply_unknown_option_raises(self):
         block = parse_block("726-01-01", block_with_high_nibble(0x0))
         with self.assertRaises(KeyError):

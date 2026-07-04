@@ -45,6 +45,8 @@ class AsBuiltBlock:
 
     def set_nibble(self, index: int, high: bool, value: int) -> "AsBuiltBlock":
         """Set the high or low nibble of one byte (value 0..15), re-checksumming."""
+        if not 0 <= index < len(self.data):
+            raise IndexError(f"byte index {index} out of range for {len(self.data)}-byte block")
         if not 0 <= value <= 0x0F:
             raise ValueError(f"nibble value must be 0..15, got {value}")
         current = self.data[index]
