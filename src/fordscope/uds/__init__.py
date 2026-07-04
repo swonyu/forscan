@@ -9,6 +9,15 @@ from .client import (
     UnexpectedResponseError,
 )
 from .simulated_ecu import SimulatedUdsEcu
+from .dtc import (
+    UdsDtc,
+    decode_dtc_records,
+    encode_dtc_record,
+    STATUS_CONFIRMED,
+    STATUS_PENDING,
+    STATUS_TEST_FAILED,
+    STATUS_WARNING_INDICATOR,
+)
 
 __all__ = [
     "services",
@@ -18,4 +27,11 @@ __all__ = [
     "NegativeResponseError",
     "UnexpectedResponseError",
     "SimulatedUdsEcu",
+    "UdsDtc",
+    "decode_dtc_records",
+    "encode_dtc_record",
+    "STATUS_CONFIRMED",
+    "STATUS_PENDING",
+    "STATUS_TEST_FAILED",
+    "STATUS_WARNING_INDICATOR",
 ]

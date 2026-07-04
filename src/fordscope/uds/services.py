@@ -49,6 +49,9 @@ ROUTINE_START = 0x01
 ROUTINE_STOP = 0x02
 ROUTINE_REQUEST_RESULTS = 0x03
 
+# --- ReadDTCInformation sub-functions (0x19) ----------------------------
+REPORT_DTC_BY_STATUS_MASK = 0x02
+
 # --- Negative Response Codes (NRCs) -------------------------------------
 NRC_GENERAL_REJECT = 0x10
 NRC_SERVICE_NOT_SUPPORTED = 0x11

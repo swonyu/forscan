@@ -21,12 +21,15 @@ from .services import (
     WRITE_DATA_BY_IDENTIFIER,
     INPUT_OUTPUT_CONTROL_BY_IDENTIFIER,
     ROUTINE_CONTROL,
+    READ_DTC_INFORMATION,
+    REPORT_DTC_BY_STATUS_MASK,
     TESTER_PRESENT,
     ROUTINE_START,
     ROUTINE_STOP,
     ROUTINE_REQUEST_RESULTS,
     nrc_name,
 )
+from .dtc import UdsDtc, decode_dtc_records
 
 
 class UdsError(Exception):
@@ -176,3 +179,14 @@ class UdsClient:
 
     def request_routine_results(self, routine_id: int) -> bytes:
         return self.routine_control(ROUTINE_REQUEST_RESULTS, routine_id)
+
+    def read_dtc_information(self, status_mask: int = 0xFF) -> "list[UdsDtc]":
+        """ReadDTCInformation (0x19 / reportDTCByStatusMask). Returns decoded DTCs."""
+        resp = self.request(
+            bytes([READ_DTC_INFORMATION, REPORT_DTC_BY_STATUS_MASK, status_mask & 0xFF])
+        )
+        assert resp is not None
+        # [0x59, 0x02, DTCStatusAvailabilityMask, <4-byte records>...]
+        if len(resp) < 3 or resp[1] != REPORT_DTC_BY_STATUS_MASK:
+            raise UnexpectedResponseError("ReadDTCInformation echo mismatch")
+        return decode_dtc_records(resp[3:])

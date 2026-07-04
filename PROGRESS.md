@@ -30,7 +30,8 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
       connect per module, read identification DIDs, present/absent detection, text report
 - [x] 3.1 Bidirectional: IOControl (0x2F) + RoutineControl (0x31) — start/stop/results, sequence
       checking. SAFETY: actuates real hardware; simulator-tested only, on-car use is NEEDS ON-CAR CHECK
-- [ ] 3.2 Whole-car scan → health report
+- [x] 3.2 Whole-car DTC report (`services/dtc_scan.py`): UDS ReadDTCInformation (0x19) per module,
+      aggregated + described (via DTC DB) + present/absent; `format_dtc_report`, `total_dtc_count`
 - [ ] 3.3 CLI + live dashboard + CSV/SQLite logging
 
 ## Phase 2 — As-Built coding (Tier 4)
@@ -106,3 +107,9 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   (0x31, with requestSequenceError when results requested before start). SAFETY caveat in
   docstrings — these actuate hardware; simulator-tested only, on-car use is NEEDS ON-CAR CHECK.
   +7 tests (125 total, `Ran 125 tests … OK`). Next: whole-car DTC report (3.2), then CLI (3.3).
+- **Iter 10** — Whole-car DTC report. UDS ReadDTCInformation 0x19/reportDTCByStatusMask on
+  `UdsClient` + `SimulatedUdsEcu` with the 3-byte-DTC+status format (`uds/dtc.py`: `UdsDtc`,
+  `decode_dtc_records`, status bits, mask filtering). `services/dtc_scan.py`: `scan_vehicle_dtcs`
+  aggregates across modules, pairs codes with DTC-DB descriptions, flags confirmed/pending,
+  present/absent. +7 tests (132 total, `Ran 132 tests … OK`). One self-caught test bug: imported
+  `IsoTpSocket` from the wrong module; removed it. Next: CLI (3.3).

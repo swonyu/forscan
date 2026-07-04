@@ -23,6 +23,8 @@ from .services import (
     WRITE_DATA_BY_IDENTIFIER,
     INPUT_OUTPUT_CONTROL_BY_IDENTIFIER,
     ROUTINE_CONTROL,
+    READ_DTC_INFORMATION,
+    REPORT_DTC_BY_STATUS_MASK,
     TESTER_PRESENT,
     SESSION_DEFAULT,
     SESSION_PROGRAMMING,
@@ -37,6 +39,7 @@ from .services import (
     NRC_REQUEST_OUT_OF_RANGE,
     NRC_REQUEST_SEQUENCE_ERROR,
 )
+from .dtc import UdsDtc, encode_dtc_record
 
 
 class SimulatedUdsEcu:
@@ -46,6 +49,7 @@ class SimulatedUdsEcu:
         *,
         io_dids: "Optional[set]" = None,
         routines: "Optional[Dict[int, bytes]]" = None,
+        dtcs: "Optional[list]" = None,
     ) -> None:
         self.dids: Dict[int, bytes] = {int(k): bytes(v) for k, v in (dids or {}).items()}
         self.session: int = SESSION_DEFAULT
@@ -55,6 +59,8 @@ class SimulatedUdsEcu:
         self.io_state: Dict[int, bytes] = {}
         self.routines: Dict[int, bytes] = {int(k): bytes(v) for k, v in (routines or {}).items()}
         self.routines_started: set = set()
+        # stored DTCs (UdsDtc list) for ReadDTCInformation
+        self.dtcs: "list[UdsDtc]" = list(dtcs or ())
 
     def __call__(self, request: bytes) -> Optional[bytes]:
         if not request:
@@ -67,6 +73,7 @@ class SimulatedUdsEcu:
             WRITE_DATA_BY_IDENTIFIER: self._write_did,
             INPUT_OUTPUT_CONTROL_BY_IDENTIFIER: self._io_control,
             ROUTINE_CONTROL: self._routine_control,
+            READ_DTC_INFORMATION: self._read_dtc_information,
             TESTER_PRESENT: self._tester_present,
         }.get(sid)
         if handler is None:
@@ -155,3 +162,17 @@ class SimulatedUdsEcu:
                 return self._nrc(ROUTINE_CONTROL, NRC_REQUEST_SEQUENCE_ERROR)
             return head + self.routines[rid]
         return self._nrc(ROUTINE_CONTROL, NRC_SUBFUNCTION_NOT_SUPPORTED)
+
+    def _read_dtc_information(self, request: bytes) -> Optional[bytes]:
+        # [0x19, subfunction, statusMask]
+        if len(request) < 3:
+            return self._nrc(READ_DTC_INFORMATION, NRC_INCORRECT_LENGTH_OR_FORMAT)
+        subfunction = request[1]
+        if subfunction != REPORT_DTC_BY_STATUS_MASK:
+            return self._nrc(READ_DTC_INFORMATION, NRC_SUBFUNCTION_NOT_SUPPORTED)
+        status_mask = request[2]
+        body = bytes([self._positive(READ_DTC_INFORMATION), REPORT_DTC_BY_STATUS_MASK, 0xFF])
+        for dtc in self.dtcs:
+            if dtc.status & status_mask:
+                body += encode_dtc_record(dtc.code, dtc.failure_type, dtc.status)
+        return body
