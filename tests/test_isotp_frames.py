@@ -85,6 +85,18 @@ class FirstFrameTests(unittest.TestCase):
         self.assertEqual(pci.length, 0x123)
         self.assertEqual(pci.data, first)
 
+    def test_parse_rejects_ff_total_below_multiframe_minimum(self):
+        # FF declaring total=3: lengths 1-7 must be Single Frames (ISO 15765-2).
+        # The encoder enforces this; the parser must too (else a bit-flipped SF is
+        # silently accepted as a bogus multi-frame message).
+        with self.assertRaises(ValueError):
+            parse_isotp(bytes([0x10, 0x03, 0, 0, 0, 0, 0, 0]))
+
+    def test_parse_accepts_ff_at_minimum_length(self):
+        pci = parse_isotp(bytes([0x10, 0x08, 1, 2, 3, 4, 5, 6]))  # total 8 = minimum
+        self.assertIs(pci.type, IsoTpFrameType.FIRST)
+        self.assertEqual(pci.length, 8)
+
 
 class ConsecutiveFrameTests(unittest.TestCase):
     def test_encode_sequence_and_data(self):

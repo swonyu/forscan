@@ -68,6 +68,11 @@ class ParseResponseTests(unittest.TestCase):
         self.assertIsNotNone(frame)
         self.assertEqual(frame.arbitration_id, 0x7E8)
 
+    def test_oversized_data_returns_none_not_crash(self):
+        # More than 8 data bytes after the header must return None (skippable),
+        # not raise out of the receive loop.
+        self.assertIsNone(parse_response_line("7E8 06 41 00 00 00 00 00 00 00 00"))
+
 
 class TransportTests(unittest.TestCase):
     def test_is_a_transport(self):
@@ -120,6 +125,17 @@ class TransportTests(unittest.TestCase):
         t.open()
         port.feed(b"NO DATA\r>")
         self.assertIsNone(t.recv())
+
+    def test_recv_skips_oversized_line_and_returns_next_frame(self):
+        port = FakeSerial()
+        t = Elm327Transport(port)
+        t.open()
+        # Oversized (11-token) corrupt line, then a valid one — must not crash.
+        port.feed(b"7E8 06 41 00 00 00 00 00 00 00 00\r7E8 06 41 0C 0F A0 00 00 00\r>")
+        frame = t.recv()
+        self.assertIsNotNone(frame)
+        self.assertEqual(frame.arbitration_id, 0x7E8)
+        self.assertEqual(len(frame.data), 8)
 
 
 if __name__ == "__main__":

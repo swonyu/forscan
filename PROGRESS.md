@@ -227,6 +227,17 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   `Ran 260 tests … OK`. **The entire phased plan (Phases 1–3 + tooling) is now complete.**
 
 ## Post-plan polish
+- **Iter 26** — Adversarial code review (2 independent reviewers over the logic-heavy files) →
+  **3 real correctness bugs found & fixed test-first** (each: failing test reproduced the crash,
+  then fixed, 266 total green):
+  1. `slcan.parse_frame` raised an uncaught `ValueError` on a DLC>8 line (docstring promises
+     `None`) → crashed the recv loop on one corrupt serial line. Fixed: bound-check DLC.
+  2. `elm327.parse_response_line` — identical crash on >8 data bytes. Fixed: bound-check length.
+  3. `parse_isotp` accepted a malformed First Frame with total 1-7 (must be a Single Frame per
+     ISO 15765-2); silently returned bogus data AND emitted a spurious Flow Control. Fixed: reject
+     `total < SF_MAX_DATA+1` in the parser (mirrors the encoder). Reviewers verified the
+     safety-critical paths (backup-before-write invariant, checksum, addressing, DTC/PID math,
+     flow-control state machine, sequence wrap) are all correct.
 - **Iter 25** — README rewrite. Replaced the stale iteration-1 README ("early… transport layer")
   with an accurate one: real command list (verified against `--help`), quick-start, the two
   live backends (marked UNVALIDATED), and a prominent honesty-boundaries section (no on-car

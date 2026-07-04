@@ -68,6 +68,11 @@ class ParseTests(unittest.TestCase):
         self.assertIsNone(parse_frame(b"\x07"))    # bell/error
         self.assertIsNone(parse_frame(b"t7E"))     # truncated
 
+    def test_oversized_dlc_returns_none_not_crash(self):
+        # DLC 9 exceeds the classic-CAN max of 8. Per the docstring this must
+        # return None (so recv can skip it), NOT raise out of the receive loop.
+        self.assertIsNone(parse_frame(b"t7DF9010203040506070809"))
+
     def test_roundtrip(self):
         for f in (
             CanFrame(0x7DF, bytes([0x02, 0x01, 0x0C])),
@@ -142,6 +147,16 @@ class TransportTests(unittest.TestCase):
         t = SlcanTransport(FakeSerial())
         t.open()
         self.assertIsNone(t.recv())
+
+    def test_recv_skips_oversized_line_and_returns_next_frame(self):
+        port = FakeSerial()
+        t = SlcanTransport(port)
+        t.open()
+        # A corrupted oversized line, then a valid frame — recv must not crash.
+        port.feed(b"t7DF9010203040506070809\rt7E84410C0FA0\r")
+        frame = t.recv()
+        self.assertIsNotNone(frame)
+        self.assertEqual(frame.arbitration_id, 0x7E8)
 
 
 if __name__ == "__main__":

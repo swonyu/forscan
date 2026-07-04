@@ -165,6 +165,11 @@ def parse_isotp(payload: bytes) -> IsoTpPci:
         total = ((payload[0] & 0x0F) << 8) | payload[1]
         if total == 0:
             raise ValueError("FF length 0 (32-bit length escape) unsupported")
+        if total < SF_MAX_DATA + 1:
+            raise ValueError(
+                f"FF total length {total} below multi-frame minimum {SF_MAX_DATA + 1} "
+                f"(lengths 1..{SF_MAX_DATA} must use a Single Frame)"
+            )
         first = payload[2 : 2 + FF_FIRST_DATA]
         return IsoTpPci(IsoTpFrameType.FIRST, data=bytes(first), length=total)
 

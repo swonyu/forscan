@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .base import CanFrame, Transport, TransportNotOpen
+from .base import CanFrame, Transport, TransportNotOpen, CAN_MAX_CLASSIC_DLC
 
 OPEN_COMMAND = b"O\r"
 CLOSE_COMMAND = b"C\r"
@@ -72,6 +72,8 @@ def parse_frame(line) -> Optional[CanFrame]:
         dlc = int(dlc_hex, 16)
     except ValueError:
         return None
+    if dlc > CAN_MAX_CLASSIC_DLC:
+        return None  # malformed: exceeds classic-CAN 8-byte max — skip, don't crash
     data_hex = rest[: 2 * dlc]
     if len(data_hex) < 2 * dlc:
         return None
