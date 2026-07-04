@@ -302,6 +302,13 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   fatal). `GET /api/report` + a "Health report" button. +3 tests; verified by running (full report
   renders). One self-caught test bug: referenced `DEMO_VIN` without importing it — fixed the import,
   not the assertion. 322 total, `Ran 322 tests … OK`.
+- **Iter 40** — Adversarial review of the web layer (grown ~12 iters unreviewed) → **2 real bugs
+  found & fixed test-first** (324 green): (1) bad hex query params (`/api/read?pid=zz`, live, log)
+  returned 500 instead of 400 — added a `ValueError→400` clause in `do_GET`. (2) `open_backend`
+  leaked the serial fd when the transport handshake failed after the port opened (each failed retry
+  → another leaked handle → "device busy") — wrapped construction+open in try/except that closes
+  the port before re-raising. Reviewer verified the rest sound: no handler-hang paths, 409 mapping
+  correct, all responses JSON-safe. Running tally: **6 real bugs found+fixed across 3 review rounds.**
 - **Iter 27** — Completed adversarial review coverage (CLI + scan services, the last un-reviewed
   logic). **1 more real bug found & fixed test-first** (268 total green): `scan_module` /
   `scan_module_dtcs` only caught `UdsError`, but `IsoTpSocket` raises a separate `IsoTpError`

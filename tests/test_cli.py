@@ -227,6 +227,27 @@ class OpenBackendTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             open_backend("slcan", None)
 
+    def test_connect_failure_closes_the_port(self):
+        # If the port opens but the transport handshake fails, the already-open
+        # serial handle must be closed (else a failed retry leaks fds -> device busy).
+        class RaisingPort:
+            def __init__(self):
+                self.closed = False
+
+            def write(self, data):
+                raise OSError("device fell off the bus")
+
+            def read(self, n=1):
+                return b""
+
+            def close(self):
+                self.closed = True
+
+        port = RaisingPort()
+        with self.assertRaises(OSError):
+            open_backend("elm327", "/dev/x", port_factory=lambda _name: port)
+        self.assertTrue(port.closed)
+
 
 class ProfileTests(unittest.TestCase):
     def test_modules_for_profile_fusion2016(self):

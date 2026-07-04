@@ -149,13 +149,22 @@ def open_backend(backend: str, port, *, port_factory=None, profile=None):
         raise ValueError(f"--port is required for the '{backend}' backend")
     opener = port_factory or _open_serial
     serial_port = opener(port)
-    if backend == "slcan":
-        transport = SlcanTransport(serial_port)
-    elif backend == "elm327":
-        transport = Elm327Transport(serial_port)
-    else:  # pragma: no cover - argparse restricts choices
-        raise ValueError(f"unknown backend {backend!r}")
-    transport.open()
+    try:
+        if backend == "slcan":
+            transport = SlcanTransport(serial_port)
+        elif backend == "elm327":
+            transport = Elm327Transport(serial_port)
+        else:  # pragma: no cover - argparse restricts choices
+            raise ValueError(f"unknown backend {backend!r}")
+        transport.open()
+    except Exception:
+        # Handshake failed after the port opened — close the fd so a failed retry
+        # doesn't leak handles (eventually "device busy").
+        try:
+            serial_port.close()
+        except Exception:
+            pass
+        raise
     modules = profile_modules if profile_modules is not None else default_modules()
     return transport, modules, LIVE_BANNER.format(backend=backend)
 

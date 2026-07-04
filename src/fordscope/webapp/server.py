@@ -193,6 +193,8 @@ def _make_handler(controller: FordScopeController):
                 return self._json({"error": "not found"}, 404)
             except NotConnectedError as exc:
                 return self._json({"error": str(exc)}, 409)
+            except ValueError as exc:  # bad hex/int query param -> client error
+                return self._json({"error": str(exc)}, 400)
             except Exception as exc:
                 return self._json({"error": str(exc)}, 500)
 

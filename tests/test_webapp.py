@@ -231,6 +231,11 @@ class ServerTests(unittest.TestCase):
         status, _raw = self._req("GET", "/api/report")
         self.assertEqual(status, 409)
 
+    def test_bad_hex_pid_is_client_error_400(self):
+        # A malformed hex query param is a client error, not a 500.
+        status, _raw = self._req("GET", "/api/read?pid=zz")
+        self.assertEqual(status, 400)
+
 
 if __name__ == "__main__":
     unittest.main()
