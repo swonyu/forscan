@@ -139,7 +139,12 @@ class ObdClient:
         # [0x49, 0x02, NODI, <VIN bytes>]
         if len(resp) < 3 or resp[1] != VEHICLE_INFO_VIN:
             raise ObdError("Mode 09 echo mismatch")
-        return resp[3:].decode("ascii", errors="replace")
+        vin = resp[3:].decode("ascii", errors="replace").rstrip("\x00").strip()
+        # A VIN is a fixed 17 chars. A short read (truncated multi-frame on a flaky
+        # line) must NOT be surfaced as a complete VIN — signal the error instead.
+        if len(vin) != 17:
+            raise ObdError(f"VIN response malformed: got {len(vin)} chars, expected 17")
+        return vin
 
     def _read_vehicle_info(self, info_type: int) -> bytes:
         """Mode 09 <info_type>: return the data payload after the NODI byte."""
@@ -154,7 +159,9 @@ class ObdClient:
         """Split a Mode 09 payload into fixed-width ASCII items, trimming the
         null padding each carries; drop empty items."""
         items = []
-        for i in range(0, len(data), item_len):
+        # Only whole fixed-width items — a truncated trailing chunk is dropped, not
+        # decoded into a fabricated extra item (consistent with read_cvns' guard).
+        for i in range(0, len(data) - (len(data) % item_len), item_len):
             text = data[i:i + item_len].split(b"\x00", 1)[0].decode("ascii", errors="replace").strip()
             if text:
                 items.append(text)

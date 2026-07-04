@@ -456,3 +456,11 @@ feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and 
   audit workflow FAILED (all 6 auditors rate-limited) and its script had a **false-clean bug**
   (null auditor → "no findings"); fixed to report INCOMPLETE. Both failed workflows need
   **serialized** re-runs (overlap tripped the shared rate-limit). No code/behavior change.
+- **Iter 55** — Safety-audit re-run **completed clean** (all 6 dimensions ran; the fixed script
+  confirms it's genuine, not a rate-limited false-clean) and found **real 2/3-verified bugs**.
+  Fixed the two HONESTY findings (365 green): (#1, HIGH) `_text_items` decoded a truncated
+  trailing chunk into a fabricated extra CALID/ECU-name item presented as a real firmware level —
+  now modulo-guarded to whole items only (consistent with `read_cvns`); (#4, MED) `read_vin`
+  returned a short/truncated VIN as if complete — now null-stripped and validated to exactly 17
+  chars, raising `ObdError` otherwise. +2 tests (truncated-CALID-tail, 9-char VIN), RED-first.
+  Remaining audit findings queued: #2 UDS P2* timeout, #3 serial-fd leak, #5 As-Built bounds.

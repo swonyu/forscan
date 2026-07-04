@@ -14,6 +14,7 @@ from fordscope.obd import (
     decode_supported_pids,
     decode_monitor_status,
     ObdClient,
+    ObdError,
     ObdNegativeResponse,
     SimulatedObdEcu,
 )
@@ -270,6 +271,20 @@ class ObdClientTests(unittest.TestCase):
         result = client.read_calibration_ids()
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0], "THIS-CALID-IS-WA")  # first 16 chars
+
+    def test_text_items_drops_truncated_partial_not_fabricated(self):
+        # A truncated on-wire Mode 09 payload (one full 16B item + a partial tail)
+        # must NOT decode the partial tail into a second, real-looking item — that
+        # would surface a fabricated calibration/firmware ID as authoritative.
+        data = b"JR3A-14C204-BF\x00\x00" + b"PARTIAL10B"  # 16-byte item + 10-byte tail
+        self.assertEqual(ObdClient._text_items(data, 16), ["JR3A-14C204-BF"])
+
+    def test_read_vin_rejects_truncated_vin(self):
+        # A short (truncated multi-frame) VIN must raise, not be returned as a
+        # complete, valid VIN.
+        client, _ = make_obd(vin="1FMHK8D89")  # only 9 of the 17 chars
+        with self.assertRaises(ObdError):
+            client.read_vin()
 
     def test_read_cvns_as_hex(self):
         # Mode 09 InfoType 0x06 — 4-byte verification number, surfaced as hex.
