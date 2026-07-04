@@ -83,7 +83,11 @@ feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and 
 - [x] R2 Session min/max/avg per live PID (iter 51): controller accumulates per-PID running
       min/max/sum/count on each `live()` poll (numeric only), reset on (re)connect;
       `live_stats()` + `GET /api/live-stats` + a "Live session" block in the health report.
-- [ ] R3 Readiness / drive-cycle coach — generic OBD conditions to complete each not-ready monitor
+- [x] R3 Readiness / drive-cycle coach (iter 86, research-partial): `obd/drive_cycle.py` maps each
+      NOT-READY monitor to a tip — **EVAP carries the Ford-verified condition** (45–65 mph, 10 min,
+      tank ½–¾), every other monitor carries clearly-labeled GENERIC guidance (the Ford-specific
+      catalyst/HEGO cycles were REFUTED, so `ford_verified=False`). `controller.drive_cycle_coach`
+      + `GET /api/drive-cycle`.
 - [x] R6 DTC state separation (iter 52): `controller.dtc_states()` reads Mode 03/07/0A and
       returns confirmed/pending/permanent groups, each with a plain-language meaning + described
       codes; `GET /api/dtc-states`. The emissions/inspection view (distinct from the UDS per-module
@@ -621,3 +625,10 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   sweep + `GET /api/monitor-tests`, demo catalyst/O2 pass + EGR fail. Honesty line straight from the
   verified research: name the category, show value/limits/pass-fail, never fabricate a TID name or
   verdict. +10 tests. 406 green.
+- **Iter 86** — **R3 SHIPPED** (drive-cycle coach). `obd/drive_cycle.py` maps each NOT-READY I/M
+  monitor to a tip: EVAP = the Ford-verified condition (cited); all others = clearly-labeled generic
+  OBD-II guidance with `ford_verified=False` (the Ford catalyst/HEGO cycles were REFUTED in
+  verification — so they're honestly NOT claimed as Ford-specific). `controller.drive_cycle_coach` +
+  `GET /api/drive-cycle`. +6 tests. 412 green. **The entire buildable roadmap R1–R6 is now DONE.**
+  Remaining: R7 (.app packaging) + R8 (on-car) — owner-gated. Per the roadmap rule, feature-
+  manufacturing STOPS here; further work is hardening/docs/the on-car graduation (R8).

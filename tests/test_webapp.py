@@ -174,6 +174,13 @@ class ControllerTests(unittest.TestCase):
         egr = next(m for m in mt if m["mid"] == 0x31)
         self.assertFalse(egr["tests"][0]["passed"])          # demo EGR fails (out of limits)
 
+    def test_drive_cycle_coach_covers_not_ready_monitors(self):
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        coach = c.drive_cycle_coach()
+        self.assertIn("Oxygen sensor", {t["monitor"] for t in coach})  # demo O2 not ready
+        self.assertTrue(all("ford_verified" in t and "guidance" in t for t in coach))
+
     def test_readiness(self):
         c = FordScopeController()
         c.connect(DEMO_PORT)
@@ -392,6 +399,15 @@ class ServerTests(unittest.TestCase):
 
     def test_monitor_tests_before_connect_returns_409(self):
         status, _raw = self._req("GET", "/api/monitor-tests")
+        self.assertEqual(status, 409)
+
+    def test_drive_cycle_endpoint(self):
+        self._json("POST", "/api/connect", {"port": DEMO_PORT})
+        _s, j = self._json("GET", "/api/drive-cycle")
+        self.assertTrue(any("guidance" in t for t in j["tips"]))
+
+    def test_drive_cycle_before_connect_returns_409(self):
+        status, _raw = self._req("GET", "/api/drive-cycle")
         self.assertEqual(status, 409)
 
     def test_report_endpoint(self):

@@ -21,6 +21,7 @@ from typing import List, Optional
 from ..cli import open_backend, list_serial_ports
 from ..isotp import IsoTpSocket
 from ..obd import ObdClient, ObdError, ObdNegativeResponse, PID_TABLE
+from ..obd.drive_cycle import drive_cycle_tips
 
 # Range-marker PIDs (0x00/0x20/…) plus status PIDs (0x01 monitor status, 0x02
 # freeze-DTC pointer) — none are live-gauge scalars, so keep them out of the picker.
@@ -375,6 +376,19 @@ class FordScopeController:
             "ready": ms.ready,
             "not_ready": ms.not_ready,
         }
+
+    @_synchronized
+    def drive_cycle_coach(self) -> list:
+        """Actionable guidance to complete the NOT-READY readiness monitors. EVAP is
+        Ford-verified; the rest are clearly-labeled GENERIC OBD-II guidance (the
+        Ford-specific cycles for those were refuted in verification) — guidance, not
+        a pass guarantee."""
+        self._require()
+        ms = self._obd().monitor_status()
+        return [
+            {"monitor": t.monitor, "guidance": t.guidance, "ford_verified": t.ford_verified}
+            for t in drive_cycle_tips(ms.not_ready)
+        ]
 
     @_synchronized
     def freeze_frame(self, pids=None) -> dict:
