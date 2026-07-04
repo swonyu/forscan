@@ -1010,6 +1010,15 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   survival of quirky READ content — a genuine gap on the surface that matters most for R8. Locked it:
   `test_open_survives_realistic_clone_adapter_quirks`. Live TIMING stays NEEDS ON-CAR CHECK; this pins
   the codec's robustness to the wire CONTENT. +1 test → **446 green**.
+- **Iter 129** (multiframe reassembly when CFs arrive in separate reads — real-adapter timing) — Kept
+  aiming at the high-stakes real-adapter path. The iter 109/110 multiframe tests fed all consecutive
+  frames in ONE `>`-terminated block, but a real adapter with inter-frame TIMING returns CF1 in one
+  read and CF2 in the next. ISO-TP loops `recv()` and elm327 buffers per `>`-block, so the composition
+  SHOULD handle it — confirmed by measurement (VIN reassembles byte-exact across separate reads), then
+  locked `test_multiframe_read_with_consecutive_frames_split_across_reads`. This is the same
+  "integration composition individual layer tests miss" class as the elm327 end-to-end thread — the
+  split-across-reads variant was the untested one, and it's exactly what happens reading a VIN / long
+  As-Built block over a real adapter. +1 test → **447 green**.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the

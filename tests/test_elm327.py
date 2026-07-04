@@ -248,6 +248,39 @@ class Elm327EndToEndReadTests(unittest.TestCase):
         ])
         self.assertEqual(obd.read_vin(), "1FMHK8D89ABA12345")
 
+    def test_multiframe_read_with_consecutive_frames_split_across_reads(self):
+        # Real-adapter TIMING: after the flow-control frame, the ECU's consecutive frames
+        # can arrive in SEPARATE '>'-terminated reads (inter-frame gaps), not one block.
+        # ISO-TP loops recv() and elm327 buffers per '>'-block, so it must still reassemble
+        # byte-exact. The iter 109/110 multiframe tests fed all CFs in ONE block -- this
+        # pins the split-across-reads composition, which is what a real adapter does.
+        class SplitFramePort:
+            def __init__(self):
+                self._blocks = []
+                self._writes = 0
+
+            def write(self, data):
+                text = bytes(data).decode("ascii", "ignore").strip()
+                if text and not text.upper().startswith("AT"):
+                    self._writes += 1
+                    if self._writes == 1:                 # the request -> FF (one block)
+                        self._blocks.append("7E8 10 14 49 02 01 31 46 4D")
+                    else:                                 # flow control -> CFs, SEPARATE blocks
+                        self._blocks += ["7E8 21 48 4B 38 44 38 39 41",
+                                         "7E8 22 42 41 31 32 33 34 35"]
+                return len(data)
+
+            def read(self, n=1):
+                return (self._blocks.pop(0) + "\r>").encode("ascii") if self._blocks else b">"
+
+            def close(self):
+                pass
+
+        t = Elm327Transport(SplitFramePort())
+        t.open()
+        obd = ObdClient(IsoTpSocket(t, tx_id=0x7E0, rx_id=0x7E8))
+        self.assertEqual(obd.read_vin(), "1FMHK8D89ABA12345")
+
     def test_no_data_surfaces_clean_error_not_a_hang(self):
         # The #1 real-world event on a live car: query an unsupported PID and the
         # adapter replies "NO DATA". The full stack (elm327 recognizes the status
