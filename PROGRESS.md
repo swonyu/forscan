@@ -704,6 +704,16 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   the live backends as "placeholders that refuse" when `open_backend()` actually builds real
   unit-tested transports flagged with the `NEEDS ON-CAR CHECK` banner — corrected to match verified
   source behavior. Repo-wide grep now CLEAN of Openport/Tactrix. No behavior change; 416 green.
+- **Iter 99** (invariant guard — root cause of the iter-98 drift) — The `openport` doc drift had a
+  real *root cause*: the CLI's argparse `--backend` **choices** and the set of backends
+  `open_backend()` actually **handles** can silently diverge — add a choice without wiring the handler
+  and a user picking a valid-per-argparse backend crashes on the "unknown backend" branch. Audited the
+  two live parsers first (`elm327` two fires ago, `slcan` this fire — both genuinely robust: trailing
+  slcan-timestamp bytes sliced via `rest[:2*dlc]`, truncated/BELL/out-of-range → `None`, no crash
+  paths; no bug, did NOT manufacture one). Then added `test_every_backend_choice_is_handled`, which
+  **introspects the real argparse choices** (a hardcoded list would drift identically) and asserts
+  each is handled. Proved the guard's teeth first: `open_backend('openport', …)` raises `unknown
+  backend 'openport'`, so an unhandled choice fails the test. +1 test → **417 green**.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the

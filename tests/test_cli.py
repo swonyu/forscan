@@ -261,6 +261,25 @@ class OpenBackendTests(unittest.TestCase):
             open_backend("elm327", "/dev/x", port_factory=lambda _name: port)
         self.assertTrue(port.closed)
 
+    def test_every_backend_choice_is_handled(self):
+        # Invariant guard (root-cause of the iter-98 doc drift): EVERY --backend
+        # value argparse accepts must be wired in open_backend(). If a choice is
+        # added to the parser but not handled, open_backend() hits its "unknown
+        # backend" branch and a user picking a valid-per-argparse backend crashes.
+        # Introspect the real choices (a hardcoded list here would drift identically).
+        from fordscope.cli import _build_parser
+
+        backend_action = next(a for a in _build_parser()._actions if a.dest == "backend")
+        self.assertTrue(backend_action.choices, "expected --backend to define choices")
+        for choice in backend_action.choices:
+            with self.subTest(backend=choice):
+                # simulator ignores the port; live backends consume the fake one.
+                _bus, _modules, banner = open_backend(
+                    choice, "/dev/x", port_factory=fake_port_factory
+                )
+                self.assertIsInstance(banner, str)
+                self.assertTrue(banner)
+
 
 class ProfileTests(unittest.TestCase):
     def test_modules_for_profile_fusion2016(self):
