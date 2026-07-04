@@ -784,6 +784,18 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   modified bytes as the 'factory original'), only making the failure typed + actionable (names the
   file, says to move it aside). RED measured first (raw exceptions ≠ AsBuiltError); +1 test (3 subcases:
   invalid JSON / bad hex / non-dict top) → **425 green**. Happy-path persistence/round-trip unbroken.
+- **Iter 106** (verify iter-105's claim end-to-end + HONEST correction of the record) — I put a claim
+  in the iter-105 commit ("callers catching AsBuiltError (CLI restore, webapp) would crash with a
+  traceback") and then verified it instead of trusting it. **The claim was imprecise on two counts:**
+  (1) the CLI's command block catches `except Exception` broadly (cli.py:404) — so a corrupt backup
+  file was NEVER a raw traceback; it already exited 3 with a *cryptic* json message. (2) The webapp
+  does NOT construct `FileBackupStore` at all (only cli.py:221 does) — so naming it was wrong. **The
+  fix's REAL, measured value:** the CLI error goes from cryptic `error: Expecting property name
+  enclosed in double quotes…` to actionable `error: As-Built backup store at '…' is
+  unreadable/corrupt (JSONDecodeError). Move it aside…` — same clean exit 3. Locked that real
+  user-facing behavior with a CLI-level test `test_corrupt_backup_file_gives_actionable_cli_error`
+  (asserts exit 3 + `unreadable/corrupt` + the file path in stderr). +1 test → **426 green**. Lesson
+  re-affirmed: verify a claim before it ships, and correct the record openly when it was overstated.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the

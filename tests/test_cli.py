@@ -189,6 +189,19 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 3)
         self.assertIn("no backup", err.lower())
 
+    def test_corrupt_backup_file_gives_actionable_cli_error(self):
+        # End-to-end: a corrupt --backup-file must fail with a clean, ACTIONABLE
+        # message (exit 3), not a cryptic json/hex error. Pins the real user-facing
+        # behavior of the iter-105 CorruptBackupStoreError through the CLI's error path.
+        with tempfile.TemporaryDirectory() as d:
+            bf = os.path.join(d, "backups.json")
+            with open(bf, "w") as fh:
+                fh.write("{not valid json")
+            code, _out, err = run("--backup-file", bf, "restore-feature", "fog_drl")
+            self.assertEqual(code, 3)
+            self.assertIn("unreadable/corrupt", err)   # actionable, not a raw json message
+            self.assertIn(bf, err)                      # names the offending file
+
     def test_restore_feature_refuses_on_live_backend(self):
         code, _out, err = run(
             "--backend", "elm327", "--port", "/dev/fake", "restore-feature", "fog_drl",
