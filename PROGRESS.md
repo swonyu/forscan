@@ -477,3 +477,21 @@ feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and 
   IndexError); added a validate-before-read guard for write-path defense-in-depth + clearer message,
   honestly logged as hardening not a corruption fix. +2 tests. 370 green. **All 5 seen findings
   closed; re-running the audit to confirm + catch anything past the truncated #5.**
+- **Iter 59** — Audit re-run **completed clean** (all 6 dims ran; my 5 fixes held) and found
+  **4 NEW** findings. Fixed the HIGH safety one: `backup_block` unconditionally overwrote the
+  stored backup, and `code_block` calls it every write — so coding a SHARED block a second time
+  (normal Ford case: many feature-nibbles per block) re-read the already-modified value and
+  clobbered the factory-original; `restore` then returned a MODIFIED state, not factory, with the
+  recovery data destroyed. Now the first-captured backup is IMMUTABLE (returns existing; opt-in
+  `force=True`). +1 test. 371 green.
+- **Iter 60** — Audit finding (honesty): `describe_dtc` asserted the SAE P0-family third-digit
+  subsystem for ALL P-codes, fabricating a category for manufacturer (P1/P3) and P2 codes
+  (P1250 → "injector circuit", but it's a pressure-regulator solenoid). Now set only for P0xxx.
+  +1 test. 372 green.
+- **Iter 61** — Audit finding (resource, gap in iter 57): `slcan.close()` wrote CLOSE_COMMAND
+  before `close_port` with no guard → a write failure (adapter yanked) skipped the fd release and
+  left `is_open` True. Wrapped the write in try/except. +1 test. 373 green.
+- **Iter 62** — Audit finding (spec, LOW): ISO-TP `_await_cts` treated a reserved FC FlowStatus
+  (0x3-0xF) as WAIT and looped to a misleading timeout; ISO 15765-2 requires N_INVALID_FS abort.
+  Now only WAIT (0x1) loops; reserved raises `IsoTpError`. +1 test. 374 green. **All 4 second-audit
+  findings closed (9 real bugs total across 2 audits); re-running a third time to converge.**
