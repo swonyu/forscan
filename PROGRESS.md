@@ -506,3 +506,20 @@ feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and 
   orchestrator + Sonnet-max subagents, serialized; token discipline; research-memory). Also wrote
   two durable memory files (fordscope-project-map, workspace-and-skills-map) + workflow-model-config.
   Docs only; no code change; 374 green.
+- **Iter 64** — 3rd audit (first on the Sonnet-5/max subagent config) **completed clean**; iters
+  59–62 held; **4 NEW findings**. Fixed the HIGH: both UDS and OBD clients checked the echoed SID on
+  the POSITIVE path but not the NEGATIVE path, so a crossed-wire `[0x7F, 0x27, 0x31]` (SecurityAccess
+  error) to a `0x22` (RDBI) request was misattributed to the caller's own request. Both now validate
+  the echoed SID/mode (ISO 14229 §7.5). +2 tests. 376 green.
+- **Iter 65** — Audit finding (MED, safety): `io_control` (0x2F) checked the DID echo but not the
+  control-option echo (`resp[3]`), unlike `routine_control`; a response confirming a DIFFERENT
+  actuator mode was accepted. Now rejected. +1 test. 377 green.
+- **Iter 66** — Audit finding (MED, concurrency): every read endpoint built `{data, banner}` from two
+  separately-locked reads → under concurrent disconnect a **LIVE/UNVALIDATED banner could silently
+  vanish** (live data shown without the red warning). Added `controller.snapshot(read)` capturing
+  `(result, banner)` under the one reentrant lock; all banner-paired endpoints use it. +1 deterministic
+  (non-flaky) concurrency test. 378 green.
+- **Iter 67** — Audit finding (LOW): `describe_dtc` malformed-guard didn't validate digit-2 (0-3) or
+  that digits 3-5 are hex, so `P4143`/`P0G43` masqueraded as well-formed. Now validated. +2 cases. 378
+  green. **13 real bugs fixed across 3 audit runs; severity trending down (HIGH→MED→LOW); 4th run to
+  check the fixpoint.**
