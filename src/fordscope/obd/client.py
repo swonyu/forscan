@@ -7,7 +7,7 @@ vehicle info (VIN). Positive response = request mode + 0x40; negative response
 from __future__ import annotations
 
 from ..isotp.socket import IsoTpSocket
-from .pids import PidResult, decode_pid, decode_dtcs
+from .pids import PidResult, decode_pid, decode_dtcs, decode_supported_pids
 from .dtc_database import DtcInfo, describe_dtc
 
 MODE_CURRENT_DATA = 0x01
@@ -60,6 +60,26 @@ class ObdClient:
         if len(resp) < 2 or resp[1] != (pid & 0xFF):
             raise ObdError("PID echo mismatch in Mode 01 response")
         return decode_pid(pid, resp[2:])
+
+    def supported_pids(self, max_ranges: int = 8) -> list:
+        """Mode 01: which PIDs the ECU supports. Queries PID 0x00, then 0x20, …
+        while the continuation bit is set. Returns the supported PID numbers."""
+        supported: list = []
+        base = 0x00
+        for _ in range(max_ranges):
+            try:
+                resp = self._request(bytes([MODE_CURRENT_DATA, base]))
+            except ObdError:
+                break
+            if len(resp) < 2 or resp[1] != base:
+                raise ObdError("supported-PIDs echo mismatch")
+            pids = decode_supported_pids(base, resp[2:6])
+            supported.extend(pids)
+            continuation = base + 0x20
+            if continuation not in pids:
+                break
+            base = continuation
+        return supported
 
     def read_dtcs(self, mode: int = MODE_STORED_DTCS) -> list[str]:
         """Mode 03 (stored), 07 (pending) or 0A (permanent) trouble codes."""

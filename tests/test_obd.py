@@ -11,6 +11,7 @@ from fordscope.obd import (
     decode_dtc,
     encode_dtc,
     decode_dtcs,
+    decode_supported_pids,
     ObdClient,
     ObdNegativeResponse,
     SimulatedObdEcu,
@@ -90,6 +91,33 @@ class DtcCodecTests(unittest.TestCase):
 
     def test_decode_dtcs_empty(self):
         self.assertEqual(decode_dtcs(bytes([0x00])), [])
+
+
+class SupportedPidsTests(unittest.TestCase):
+    def test_decode_single_pids(self):
+        # PID 0x01 = MSB (bit 31); mask 0x80000000.
+        self.assertEqual(decode_supported_pids(0x00, bytes([0x80, 0x00, 0x00, 0x00])), [0x01])
+        # PID 0x20 (continuation) = LSB (bit 0); mask 0x00000001.
+        self.assertEqual(decode_supported_pids(0x00, bytes([0x00, 0x00, 0x00, 0x01])), [0x20])
+
+    def test_decode_multiple_pids(self):
+        # PIDs 0x05,0x0C,0x0D -> bits 27,20,19 -> 0x08180000.
+        self.assertEqual(
+            decode_supported_pids(0x00, bytes([0x08, 0x18, 0x00, 0x00])), [0x05, 0x0C, 0x0D]
+        )
+
+    def test_decode_rejects_short_mask(self):
+        with self.assertRaises(ValueError):
+            decode_supported_pids(0x00, bytes([0x00, 0x00]))
+
+    def test_client_lists_supported(self):
+        client, _ = make_obd(pids={0x0C: bytes([0x0F, 0xA0]), 0x05: bytes([90]), 0x0D: bytes([0x40])})
+        self.assertEqual(client.supported_pids(), [0x05, 0x0C, 0x0D])
+
+    def test_client_follows_continuation_to_next_range(self):
+        # A PID in the 0x21-0x40 range forces the client to query PID 0x20 too.
+        client, _ = make_obd(pids={0x05: bytes([90]), 0x2F: bytes([0xFF])})
+        self.assertEqual(client.supported_pids(), [0x05, 0x20, 0x2F])
 
 
 class ObdClientTests(unittest.TestCase):

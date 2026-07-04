@@ -255,6 +255,11 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   `POST /api/clear-dtc` (mutating → POST, `NotConnectedError`→409) + a UI button gated behind a
   browser confirm ("also resets emissions readiness"). +4 tests. Also sped the server tests:
   `serve_forever(poll_interval=0.02)` so shutdown returns fast — suite 3.5s → **0.195s**. 283 green.
+- **Iter 31** — Supported-PIDs engine (Mode 01 PID 0x00). `decode_supported_pids(base, mask)` (pure,
+  32-bit mask → PID list) + `SimulatedObdEcu` auto-computes the 0x00/0x20/… masks from its PID set
+  (incl. the continuation bit) + `ObdClient.supported_pids()` follows PID 0x00→0x20→… while the
+  continuation bit is set. +5 tests incl. the range-follow (a 0x2F PID pulls in range 0x20). Engine
+  layer only; wires into the Mac app next. 288 total, `Ran 288 tests … OK` (0.19s).
 - **Iter 27** — Completed adversarial review coverage (CLI + scan services, the last un-reviewed
   logic). **1 more real bug found & fixed test-first** (268 total green): `scan_module` /
   `scan_module_dtcs` only caught `UdsError`, but `IsoTpSocket` raises a separate `IsoTpError`

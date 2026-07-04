@@ -54,13 +54,30 @@ class SimulatedObdEcu:
             return self._mode09(request)
         return bytes([0x7F, mode, 0x11])  # serviceNotSupported
 
+    _SUPPORT_QUERY_PIDS = (0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0, 0xE0)
+
     def _mode01(self, request: bytes) -> bytes:
         if len(request) < 2:
             return bytes([0x7F, 0x01, 0x13])
         pid = request[1]
+        if pid in self._SUPPORT_QUERY_PIDS:
+            return bytes([0x41, pid]) + self._supported_mask(pid)
         if pid not in self.pids:
             return bytes([0x7F, 0x01, 0x31])  # requestOutOfRange
         return bytes([0x41, pid]) + self.pids[pid]
+
+    def _supported_mask(self, base: int) -> bytes:
+        bits = 0
+        for offset in range(1, 0x21):
+            p = base + offset
+            if offset == 0x20:
+                # continuation PID: supported if any PID exists in the next range
+                supported = any((base + 0x21) <= q <= (base + 0x40) for q in self.pids)
+            else:
+                supported = p in self.pids
+            if supported:
+                bits |= 1 << (0x20 - offset)
+        return bits.to_bytes(4, "big")
 
     @staticmethod
     def _dtc_block(sid: int, codes: List[str]) -> bytes:

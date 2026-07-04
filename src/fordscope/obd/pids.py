@@ -127,6 +127,19 @@ def encode_dtc(code: str) -> bytes:
     return bytes([a, b])
 
 
+def decode_supported_pids(base: int, data: bytes) -> list[int]:
+    """Decode a Mode 01 supported-PIDs bitmask (PID 0x00/0x20/... response).
+
+    ``data`` is the 4-byte mask; the MSB (bit 31 of byte A) is PID ``base+1`` and
+    the LSB (bit 0 of byte D) is PID ``base+0x20`` (which, when set, means the next
+    range is available). Returns the supported PID numbers.
+    """
+    if len(data) < 4:
+        raise ValueError(f"supported-PIDs mask needs 4 bytes, got {len(data)}")
+    bits = int.from_bytes(data[:4], "big")
+    return [base + offset for offset in range(1, 0x21) if bits & (1 << (0x20 - offset))]
+
+
 def decode_dtcs(payload: bytes) -> list[str]:
     """Decode a Mode 03/07/0A body: [count, (A,B) x count]. Skips 0x0000 pads."""
     if not payload:
