@@ -39,6 +39,13 @@ class NoBackupError(AsBuiltError):
     """A restore was requested but no backup exists for that block."""
 
 
+class CorruptBackupStoreError(AsBuiltError):
+    """The durable backup file exists but is unreadable/corrupt. Raised instead of
+    silently starting with an empty store — an empty store would let a later
+    backup_block capture already-modified bytes as the 'factory original', destroying
+    the one recovery path. Fail loud, but as a typed, catchable, actionable error."""
+
+
 # --- backup stores -----------------------------------------------------
 class InMemoryBackupStore:
     def __init__(self) -> None:
@@ -64,9 +71,22 @@ class FileBackupStore:
         self.path = str(path)
         self._data: Dict[str, bytes] = {}
         if os.path.exists(self.path):
-            with open(self.path, "r") as fh:
-                raw = json.load(fh)
-            self._data = {k: bytes.fromhex(v) for k, v in raw.items()}
+            # The durable backup file is the ONE recovery path back to factory bytes.
+            # If it is unreadable we must FAIL LOUD (never silently start empty), but
+            # as a typed AsBuiltError so callers catching AsBuiltError get an actionable
+            # message instead of a raw json/hex traceback. JSONDecodeError and the
+            # fromhex/UnicodeDecode failures are all ValueError subclasses; a non-dict
+            # top level raises AttributeError/TypeError on .items()/fromhex.
+            try:
+                with open(self.path, "r") as fh:
+                    raw = json.load(fh)
+                self._data = {k: bytes.fromhex(v) for k, v in raw.items()}
+            except (ValueError, TypeError, AttributeError) as exc:
+                raise CorruptBackupStoreError(
+                    f"As-Built backup store at {self.path!r} is unreadable/corrupt "
+                    f"({type(exc).__name__}). Move it aside to start fresh, or restore "
+                    f"a known-good copy — refusing to start with no recovery data."
+                ) from exc
 
     def _flush(self, data: Dict[str, bytes]) -> None:
         parent = os.path.dirname(self.path)

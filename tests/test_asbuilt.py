@@ -16,9 +16,11 @@ from fordscope.ford import (
     AsBuiltCoder,
     InMemoryBackupStore,
     FileBackupStore,
+    AsBuiltError,
     BackupRequiredError,
     VerificationError,
     NoBackupError,
+    CorruptBackupStoreError,
 )
 
 BLOCK_DID = 0x5000
@@ -164,6 +166,26 @@ class FileBackupStoreTests(unittest.TestCase):
                 with self.assertRaises(OSError):
                     store.save("TESTVIN:5000", ORIGINAL)
             self.assertFalse(store.has("TESTVIN:5000"))  # not persisted -> not "backed up"
+
+    def test_corrupt_backup_file_fails_loud_as_typed_error(self):
+        # The durable backup file is the ONE recovery path. If it is unreadable we must
+        # FAIL LOUD (never silently start empty -> a later backup_block would capture
+        # already-modified bytes as the "factory original"), but as a typed AsBuiltError
+        # so callers catching AsBuiltError get an actionable message, not a raw traceback.
+        for label, contents in [
+            ("invalid-json", "{not valid json"),
+            ("bad-hex", '{"TESTVIN:5000": "ZZZZ"}'),      # valid JSON, un-hex value
+            ("non-dict-top", '["not", "a", "dict"]'),      # .items() would AttributeError
+        ]:
+            with self.subTest(label=label):
+                with tempfile.TemporaryDirectory() as d:
+                    path = os.path.join(d, "backups.json")
+                    with open(path, "w") as fh:
+                        fh.write(contents)
+                    with self.assertRaises(CorruptBackupStoreError) as ctx:
+                        FileBackupStore(path)
+                    self.assertIsInstance(ctx.exception, AsBuiltError)  # catchable as AsBuiltError
+                    self.assertIn(path, str(ctx.exception))             # actionable: names the file
 
 
 if __name__ == "__main__":

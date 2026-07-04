@@ -770,6 +770,20 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   without the guard the bogus `'1FMHK8D89*BA12345'` is returned, then added
   `test_read_vin_rejects_nonalphanumeric_ascii_same_length` — the third sibling of the truncated /
   non-ASCII rejection tests. +1 test → **424 green**.
+- **Iter 105** (SAFETY — typed error on a corrupt backup store; PRODUCTION-code hardening) — Final
+  safety re-read of `ford/asbuilt.py` (the highest-stakes surface — it writes a real car's config).
+  The invariants are solid on re-read: unconditional backup gate with no bypass param, immutable
+  first-capture, persist-before-commit, atomic temp+fsync+replace flush. Found ONE genuine gap by
+  measurement: `FileBackupStore.__init__` loads the durable backup file with raw `json.load` +
+  `bytes.fromhex`, so a CORRUPT file (disk fault, manual edit, old pre-atomic partial write) raised a
+  raw `JSONDecodeError`/`ValueError` — bypassing the module's typed-error contract, so callers catching
+  `AsBuiltError` (CLI restore, webapp) would crash with a traceback instead of an actionable message.
+  This is the RECOVERY store — the one path back to factory bytes. Fix (production code): added
+  `CorruptBackupStoreError(AsBuiltError)`, exported it, and wrapped the load to raise it — PRESERVING
+  the safe fail-loud (never silently start empty, which would let a later `backup_block` capture
+  modified bytes as the 'factory original'), only making the failure typed + actionable (names the
+  file, says to move it aside). RED measured first (raw exceptions ≠ AsBuiltError); +1 test (3 subcases:
+  invalid JSON / bad hex / non-dict top) → **425 green**. Happy-path persistence/round-trip unbroken.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the

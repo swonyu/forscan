@@ -20,6 +20,7 @@ from .asbuilt import (
     BackupRequiredError,
     VerificationError,
     NoBackupError,
+    CorruptBackupStoreError,
 )
 from .asbuilt_format import AsBuiltBlock, parse_block, compute_checksum
 from .features import FeatureDefinition, FeatureCoder, EXAMPLE_FEATURES
@@ -43,6 +44,7 @@ __all__ = [
     "BackupRequiredError",
     "VerificationError",
     "NoBackupError",
+    "CorruptBackupStoreError",
     "AsBuiltBlock",
     "parse_block",
     "compute_checksum",
