@@ -19,9 +19,10 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
       Follow-up: ECU-side receive block-size>0 + real STmin timing are [NEEDS ON-CAR CHECK].
 - [x] 1.2 UDS client (ISO 14229): request/response, NRC handling, responsePending (0x78) loop,
       session control, ECU reset, tester-present, Read/WriteDataByIdentifier + `SimulatedUdsEcu`
-- [ ] 1.3 OBD-II (SAE J1979) modes 01–0A on top of ISO-TP
-- [ ] 1.4 PID decode table (RPM, coolant, MAF, MAP, fuel trims, speed, …) with units
-- [ ] 1.5 DTC read/clear + DTC-definition database (generic + Ford)
+- [x] 1.3 OBD-II (SAE J1979): `ObdClient` — Mode 01 current data, 03/07/0A DTC reads, 04 clear,
+      09 VIN; positive/negative handling; `SimulatedObdEcu`
+- [x] 1.4 PID decode table: 16 common PIDs (RPM/coolant/MAF/MAP/fuel-trims/speed/throttle/…) with units
+- [ ] 1.5 DTC read/clear ✅ (done in 1.3) + DTC-definition database (generic + Ford) — DB still to build
 - [ ] 2.1 Ford enhanced module map + 29-bit addressing (PCM/TCM/ABS/BCM/IPC/APIM/RCM…)
 - [ ] 2.2 ReadDataByIdentifier (0x22) across modules
 - [ ] 3.1 Bidirectional: IOControl (0x2F) + RoutineControl (0x31) scaffolding
@@ -72,3 +73,8 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   `simulated_ecu.py`: `SimulatedUdsEcu` (DID store, sessions) as a `SimulatedIsoTpEcu` handler.
   +17 tests incl. multi-frame VIN read, multi-frame write round-trip, NRC paths, and both
   responsePending outcomes (70 total, `Ran 70 tests … OK`).
+- **Iter 5** — OBD-II (SAE J1979) layer (`obd/`). `pids.py`: 16-PID decode table with units +
+  `decode_dtc`/`encode_dtc`/`decode_dtcs` (2-byte ↔ "P0143"), all pure/hand-derived. `client.py`:
+  `ObdClient` — Mode 01 current data (decoded), 03/07/0A DTC reads, 04 clear, 09 multi-frame VIN,
+  positive/negative handling. `simulated_ecu.py`: `SimulatedObdEcu`. +24 tests incl. PID scaling,
+  DTC round-trips, clear, multi-frame VIN (94 total, `Ran 94 tests … OK`). Next: DTC-definition DB.
