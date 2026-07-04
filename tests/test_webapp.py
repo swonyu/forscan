@@ -453,6 +453,35 @@ class ConcurrencyTests(unittest.TestCase):
             observed_max, 1, "a second thread entered the shared transport concurrently"
         )
 
+    def test_read_snapshot_captures_banner_atomically(self):
+        # snapshot(read) must read the banner under the SAME lock as read(), so a
+        # concurrent disconnect can't null the banner between the two reads — which
+        # would return live data with the LIVE/UNVALIDATED warning silently dropped.
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        c.banner = "LIVE-MARKER"
+        entered = threading.Event()
+        release = threading.Event()
+        captured = {}
+
+        def parked_read():
+            entered.set()
+            release.wait(1.0)
+            return "scan-data"
+
+        t1 = threading.Thread(
+            target=lambda: captured.update(pair=c.snapshot(parked_read)), daemon=True
+        )
+        t1.start()
+        self.assertTrue(entered.wait(1.0))  # snapshot holds the lock, parked in read
+        t2 = threading.Thread(target=c.disconnect, daemon=True)
+        t2.start()
+        time.sleep(0.2)  # let the disconnect try to run — it must block on the lock
+        release.set()
+        t1.join(1.0)
+        t2.join(1.0)
+        self.assertEqual(captured["pair"], ("scan-data", "LIVE-MARKER"))
+
 
 if __name__ == "__main__":
     unittest.main()

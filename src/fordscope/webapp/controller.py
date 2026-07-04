@@ -107,6 +107,14 @@ class FordScopeController:
         return ObdClient(IsoTpSocket(self.transport, tx_id=0x7E0, rx_id=0x7E8))
 
     @_synchronized
+    def snapshot(self, read):
+        """Run a read callable and capture the banner atomically under the ONE lock,
+        returning ``(result, banner)``. Endpoints pair data with the banner; without
+        this a concurrent connect/disconnect could swap the banner between the two
+        reads and silently drop the LIVE/UNVALIDATED warning shown beside live data."""
+        return read(), self.banner
+
+    @_synchronized
     def scan(self) -> str:
         self._require()
         return format_scan_report(scan_vehicle(self.transport, self.modules))

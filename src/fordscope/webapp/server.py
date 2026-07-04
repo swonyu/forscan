@@ -174,33 +174,43 @@ def _make_handler(controller: FordScopeController):
                 if u.path == "/api/ports":
                     return self._json({"ports": list_ports()})
                 if u.path == "/api/scan":
-                    return self._json({"text": controller.scan(), "banner": controller.banner})
+                    text, banner = controller.snapshot(controller.scan)
+                    return self._json({"text": text, "banner": banner})
                 if u.path == "/api/dtc":
-                    return self._json({"text": controller.dtc(), "banner": controller.banner})
+                    text, banner = controller.snapshot(controller.dtc)
+                    return self._json({"text": text, "banner": banner})
                 if u.path == "/api/vin":
-                    return self._json({"vin": controller.vin(), "banner": controller.banner})
+                    vin, banner = controller.snapshot(controller.vin)
+                    return self._json({"vin": vin, "banner": banner})
                 if u.path == "/api/read":
                     pid = int(parse_qs(u.query).get("pid", ["0C"])[0], 16)
                     return self._json(controller.read_pid(pid))
                 if u.path == "/api/live":
                     pids_str = parse_qs(u.query).get("pids", ["0C,05,0D"])[0]
                     pids = [int(p, 16) for p in pids_str.split(",") if p.strip()]
-                    return self._json({"rows": controller.live(pids), "banner": controller.banner})
+                    rows, banner = controller.snapshot(lambda: controller.live(pids))
+                    return self._json({"rows": rows, "banner": banner})
                 if u.path == "/api/supported":
-                    return self._json({"pids": controller.supported_pids(), "banner": controller.banner})
+                    pids, banner = controller.snapshot(controller.supported_pids)
+                    return self._json({"pids": pids, "banner": banner})
                 if u.path == "/api/freeze":
-                    fr = controller.freeze_frame()
-                    return self._json({**fr, "banner": controller.banner})
+                    fr, banner = controller.snapshot(controller.freeze_frame)
+                    return self._json({**fr, "banner": banner})
                 if u.path == "/api/readiness":
-                    return self._json({**controller.readiness(), "banner": controller.banner})
+                    rd, banner = controller.snapshot(controller.readiness)
+                    return self._json({**rd, "banner": banner})
                 if u.path == "/api/calibration":
-                    return self._json({**controller.calibration(), "banner": controller.banner})
+                    cal, banner = controller.snapshot(controller.calibration)
+                    return self._json({**cal, "banner": banner})
                 if u.path == "/api/live-stats":
-                    return self._json({"stats": controller.live_stats(), "banner": controller.banner})
+                    stats, banner = controller.snapshot(controller.live_stats)
+                    return self._json({"stats": stats, "banner": banner})
                 if u.path == "/api/dtc-states":
-                    return self._json({**controller.dtc_states(), "banner": controller.banner})
+                    st, banner = controller.snapshot(controller.dtc_states)
+                    return self._json({**st, "banner": banner})
                 if u.path == "/api/report":
-                    return self._json({"report": controller.health_report(), "banner": controller.banner})
+                    report, banner = controller.snapshot(controller.health_report)
+                    return self._json({"report": report, "banner": banner})
                 if u.path == "/api/report.txt":
                     return self._download(
                         controller.health_report(), "fordscope-health-report.txt", "text/plain"
@@ -229,8 +239,8 @@ def _make_handler(controller: FordScopeController):
                     controller.disconnect()
                     return self._json({"ok": True})
                 if u.path == "/api/clear-dtc":
-                    controller.clear_dtcs()
-                    return self._json({"ok": True, "banner": controller.banner})
+                    _, banner = controller.snapshot(controller.clear_dtcs)
+                    return self._json({"ok": True, "banner": banner})
                 return self._json({"error": "not found"}, 404)
             except NotConnectedError as exc:
                 return self._json({"error": str(exc)}, 409)
