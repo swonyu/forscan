@@ -982,6 +982,15 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   propagated), wrote the RED test, then added `except KeyboardInterrupt: print("Interrupted."); return
   130` (the conventional Ctrl-C exit code) before the `except Exception` — the CLI analog of the
   webapp's clean Ctrl-C handling; the `finally` still closes the live bus. +1 test → **444 green**.
+- **Iter 126** (README banner sibling of the iter-122 fix + guard the CLASS) — Cross-checked the README
+  against the current feature set (accurate — verified "35 decoded PIDs" == the actual PID_TABLE count).
+  But found the SIBLING of iter 122's fix: README.md:70 had the same backtick-quoted banner PARAPHRASE
+  `LIVE — UNVALIDATED (NEEDS ON-CAR CHECK)` while the real banner is `-- LIVE VEHICLE via elm327 ::
+  UNVALIDATED backend (NEEDS ON-CAR CHECK) --`. I'd fixed FIRST_RUN but not swept for siblings, and the
+  iter-122 guard only checked FIRST_RUN — which is exactly why the README drifted unnoticed. Swept all
+  docs (README was the only remaining sibling), fixed it to the exact banner, and generalized the guard
+  → `test_docs_quote_the_exact_live_banner` now covers BOTH docs (subTest per file), so the class can't
+  drift again. No net test count change (renamed+extended the guard). 444 green.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the

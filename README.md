@@ -67,7 +67,7 @@ python3 -m fordscope --backend elm327 --port /dev/tty.usbserial-XXXX --profile f
 ```
 
 `elm327` = OBDLink EX / ELM327; `slcan` = CANable-class dongle. Live runs print a
-`LIVE — UNVALIDATED (NEEDS ON-CAR CHECK)` banner.
+`-- LIVE VEHICLE via elm327 :: UNVALIDATED backend (NEEDS ON-CAR CHECK) --` banner.
 
 ## Honesty boundaries (by design)
 
