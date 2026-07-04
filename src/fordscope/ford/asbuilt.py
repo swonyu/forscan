@@ -146,9 +146,11 @@ class AsBuiltCoder:
         if self.enter_extended_session:
             self.uds.diagnostic_session_control(SESSION_EXTENDED)
 
-    def write_block(self, did: int, data: bytes, *, require_backup: bool = True) -> None:
-        """Write a block. REFUSES unless a backup exists; verifies by read-back."""
-        if require_backup and not self.has_backup(did):
+    def write_block(self, did: int, data: bytes) -> None:
+        """Write a block. REFUSES unless a backup exists; verifies by read-back. The
+        backup gate is UNCONDITIONAL — there is deliberately no bypass parameter, so
+        the tool's non-negotiable backup-before-write rule can't be silently disabled."""
+        if not self.has_backup(did):
             raise BackupRequiredError(
                 f"refusing to write DID 0x{did:04X}: capture a backup first "
                 f"(backup_block or code_block)"

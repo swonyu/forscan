@@ -58,6 +58,13 @@ class SafetyInvariantTests(unittest.TestCase):
         coder.write_block(BLOCK_DID, NEW)
         self.assertEqual(ecu.dids[BLOCK_DID], NEW)
 
+    def test_write_block_has_no_backup_bypass(self):
+        # The backup gate is the tool's non-negotiable rule — there must be NO
+        # escape-hatch parameter (e.g. require_backup=False) that skips it.
+        coder, _ = make_coder()
+        with self.assertRaises(TypeError):
+            coder.write_block(BLOCK_DID, NEW, require_backup=False)
+
     def test_read_back_mismatch_raises_verification_error(self):
         coder, ecu = make_coder(ecu=CorruptingUdsEcu(dids={BLOCK_DID: ORIGINAL}))
         coder.backup_block(BLOCK_DID)
