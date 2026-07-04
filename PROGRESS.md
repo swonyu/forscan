@@ -974,6 +974,14 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   instance`) and return cleanly. Added `import sys`. **Verified BY RUNNING** the real entry point
   (`python -m fordscope.webapp`) on a held port: exit 0, no traceback, the clean message on stderr.
   Existing keyboard-interrupt test unaffected (the wrap only catches OSError). +1 test → **443 green**.
+- **Iter 125** (CLI Ctrl-C exits cleanly — the OTHER entry point's edge) — Applied iter-124's lesson
+  (entry-point edges cluster late UX bugs) to the CLI. The webapp's `run()` catches `KeyboardInterrupt`,
+  but the CLI's `main()` command block catches `except Exception` — which does NOT catch
+  `KeyboardInterrupt` (it's `BaseException`), so Ctrl-C during a slow command (`log --interval`, a
+  real-adapter scan) dumped a traceback. Verified empirically (a KeyboardInterrupt-raising command
+  propagated), wrote the RED test, then added `except KeyboardInterrupt: print("Interrupted."); return
+  130` (the conventional Ctrl-C exit code) before the `except Exception` — the CLI analog of the
+  webapp's clean Ctrl-C handling; the `finally` still closes the live bus. +1 test → **444 green**.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the

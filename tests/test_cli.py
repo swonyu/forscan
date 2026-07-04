@@ -242,6 +242,18 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 3)
         self.assertIn("error", err.lower())
 
+    def test_keyboard_interrupt_during_command_exits_cleanly(self):
+        # Ctrl-C during a slow command (log with intervals, a real-adapter scan) must
+        # exit cleanly with a message + code 130, NOT dump a KeyboardInterrupt traceback
+        # -- the CLI analog of run()'s clean Ctrl-C handling for the webapp. KeyboardInterrupt
+        # is BaseException, so the command block's `except Exception` does not catch it.
+        from unittest import mock
+        import fordscope.cli as cli
+        with mock.patch.object(cli, "scan_vehicle", side_effect=KeyboardInterrupt):
+            code, _out, err = run("scan")  # must NOT raise
+        self.assertEqual(code, 130)
+        self.assertIn("Interrupted", err)
+
 
 class OpenBackendTests(unittest.TestCase):
     def test_simulator_returns_demo_and_simulated_banner(self):

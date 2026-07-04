@@ -401,6 +401,9 @@ def main(argv: Optional[List[str]] = None, *, port_factory=None) -> int:
                 print(f"logged {len(rows)} samples of {len(pids)} PID(s) to {args.out}")
             else:
                 print(csv_text, end="")
+    except KeyboardInterrupt:  # Ctrl-C during a slow command -> clean abort, not a traceback
+        print("Interrupted.", file=sys.stderr)
+        return 130
     except Exception as exc:  # surface a clean message, non-zero exit
         print(f"error: {exc}", file=sys.stderr)
         return 3
