@@ -323,6 +323,12 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   scan walks the VERIFIED Fusion module map instead of the generic guess. Backend already supported
   it; this exposes it in the UI. +2 tests (controller + endpoint: fusion profile → scan shows the
   Fusion-specific RCM module). 330 total, `Ran 330 tests … OK`.
+- **Iter 44** — Adversarial review of the post-first-review engine additions (the 19 newer Mode 01
+  PID scaling formulas, `decode_supported_pids`/`_supported_mask`, the supported-PIDs follow loop,
+  the `decode_monitor_status` supported-vs-incomplete inversion + spark/compression monitor tables,
+  Mode 02 freeze-frame framing). **NO bugs found** — every formula verified vs SAE J1979, the
+  monitor bit-tables cross-checked against primary sources by the reviewer. Clean; no code change.
+  Reviews now cover the whole codebase across 4 rounds (6 real bugs total, all in earlier code).
 - **Iter 27** — Completed adversarial review coverage (CLI + scan services, the last un-reviewed
   logic). **1 more real bug found & fixed test-first** (268 total green): `scan_module` /
   `scan_module_dtcs` only caught `UdsError`, but `IsoTpSocket` raises a separate `IsoTpError`
