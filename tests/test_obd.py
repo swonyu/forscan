@@ -286,6 +286,26 @@ class ObdClientTests(unittest.TestCase):
         with self.assertRaises(ObdError):
             client.read_vin()
 
+    def test_read_vin_rejects_corrupted_byte_same_length(self):
+        # A SAME-length VIN with one corrupt (non-ASCII) byte must raise, not be
+        # returned as complete with a U+FFFD silently substituted for real data.
+        class _Scripted:
+            def send(self, payload):
+                pass
+
+            def recv(self, timeout=1.0):
+                # 16 real VIN chars + 1 corrupt byte = 17 raw bytes (passes len==17)
+                return bytes([0x49, 0x02, 0x01]) + b"1FMHK8D89ABA1234" + bytes([0xFF])
+
+        with self.assertRaises(ObdError):
+            ObdClient(_Scripted()).read_vin()
+
+    def test_text_items_drops_corrupted_item_not_fabricated(self):
+        # An item with a corrupt (non-ASCII) byte must be dropped, not surfaced as a
+        # calibration ID with a U+FFFD baked in.
+        data = b"JR3A-14C204\xff-BF0"  # 16 bytes, one corrupt
+        self.assertEqual(ObdClient._text_items(data, 16), [])
+
     def test_read_cvns_as_hex(self):
         # Mode 09 InfoType 0x06 — 4-byte verification number, surfaced as hex.
         client, _ = make_obd(cvns=[bytes([0xA5, 0xB3, 0xC1, 0xD2])])

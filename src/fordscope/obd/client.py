@@ -146,11 +146,16 @@ class ObdClient:
         # [0x49, 0x02, NODI, <VIN bytes>]
         if len(resp) < 3 or resp[1] != VEHICLE_INFO_VIN:
             raise ObdError("Mode 09 echo mismatch")
-        vin = resp[3:].decode("ascii", errors="replace").rstrip("\x00").strip()
-        # A VIN is a fixed 17 chars. A short read (truncated multi-frame on a flaky
-        # line) must NOT be surfaced as a complete VIN — signal the error instead.
-        if len(vin) != 17:
-            raise ObdError(f"VIN response malformed: got {len(vin)} chars, expected 17")
+        # Decode STRICT (not errors="replace") so a corrupted non-ASCII byte raises
+        # instead of baking a U+FFFD into a same-length string that passes the guard.
+        try:
+            vin = resp[3:].decode("ascii").rstrip("\x00").strip()
+        except UnicodeDecodeError:
+            raise ObdError("VIN response contains non-ASCII bytes")
+        # A VIN is exactly 17 alphanumeric chars; a truncated OR content-corrupted
+        # read must NOT be surfaced as a complete VIN — signal the error instead.
+        if len(vin) != 17 or not vin.isalnum():
+            raise ObdError(f"VIN response malformed: {vin!r} (expected 17 alphanumeric chars)")
         return vin
 
     def _read_vehicle_info(self, info_type: int) -> bytes:
@@ -169,7 +174,12 @@ class ObdClient:
         # Only whole fixed-width items — a truncated trailing chunk is dropped, not
         # decoded into a fabricated extra item (consistent with read_cvns' guard).
         for i in range(0, len(data) - (len(data) % item_len), item_len):
-            text = data[i:i + item_len].split(b"\x00", 1)[0].decode("ascii", errors="replace").strip()
+            # STRICT decode: an item with a corrupt non-ASCII byte is DROPPED, not
+            # surfaced with a U+FFFD baked into a fabricated calibration/ECU id.
+            try:
+                text = data[i:i + item_len].split(b"\x00", 1)[0].decode("ascii").strip()
+            except UnicodeDecodeError:
+                continue
             if text:
                 items.append(text)
         return items
