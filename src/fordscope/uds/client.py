@@ -63,10 +63,14 @@ class UdsClient:
         socket: IsoTpSocket,
         *,
         p2_timeout: float = 1.0,
+        p2_star_timeout: float = 5.0,
         max_response_pending: int = 5,
     ) -> None:
         self.socket = socket
         self.p2_timeout = p2_timeout
+        # ISO 14229 P2*server_max: the longer window the ECU may use AFTER it has
+        # sent responsePending (0x78). Default 5 s per the standard's typical value.
+        self.p2_star_timeout = p2_star_timeout
         self.max_response_pending = max_response_pending
 
     def request(self, payload: bytes, *, expect_response: bool = True) -> Optional[bytes]:
@@ -83,8 +87,9 @@ class UdsClient:
             return None
 
         pending = 0
+        timeout = self.p2_timeout
         while True:
-            resp = self.socket.recv(self.p2_timeout)
+            resp = self.socket.recv(timeout)
             if resp is None:
                 raise UdsError(f"no response to service 0x{sid:02X}")
             if len(resp) == 0:
@@ -100,6 +105,7 @@ class UdsClient:
                         raise UdsError(
                             f"service 0x{sid:02X}: too many responsePending (0x78)"
                         )
+                    timeout = self.p2_star_timeout  # ECU is working — grant P2*
                     continue
                 raise NegativeResponseError(echoed_sid, nrc)
 

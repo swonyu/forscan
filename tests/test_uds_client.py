@@ -167,5 +167,37 @@ class ResponsePendingTests(unittest.TestCase):
             client.request(bytes([0x22, 0x01, 0x02]))
 
 
+class _RecordingSocket:
+    """Minimal IsoTpSocket stand-in: scripts recv() responses and records the
+    timeout each recv() was called with."""
+
+    def __init__(self, responses):
+        self._responses = list(responses)
+        self.recv_timeouts = []
+
+    def send(self, payload):
+        pass
+
+    def recv(self, timeout=1.0):
+        self.recv_timeouts.append(timeout)
+        return self._responses.pop(0) if self._responses else None
+
+
+class ResponsePendingTimeoutTests(unittest.TestCase):
+    def test_response_pending_switches_to_p2_star_timeout(self):
+        # ISO 14229: after requestCorrectlyReceived-ResponsePending (0x78) the ECU
+        # may take up to P2* (long) — the client must wait that window, not the
+        # short P2, or it aborts an operation the ECU is legitimately completing.
+        sock = _RecordingSocket([
+            bytes([0x7F, 0x22, 0x78]),   # responsePending
+            bytes([0x62, 0xF1, 0x90]),   # positive RDBI response
+        ])
+        client = UdsClient(sock, p2_timeout=1.0, p2_star_timeout=5.0)
+        resp = client.request(bytes([0x22, 0xF1, 0x90]))
+        self.assertEqual(resp, bytes([0x62, 0xF1, 0x90]))
+        # First recv on P2 (1.0); every recv AFTER a 0x78 on P2* (5.0).
+        self.assertEqual(sock.recv_timeouts, [1.0, 5.0])
+
+
 if __name__ == "__main__":
     unittest.main()
