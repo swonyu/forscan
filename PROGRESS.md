@@ -26,7 +26,8 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
       fallback that flags uncurated/manufacturer codes instead of inventing a meaning
 - [x] 2.1 Ford enhanced addressing: 11-bit (legislated + Ford +8) and 29-bit normal-fixed
       (0x18DA{TA}{SA}/0x18DAF1{TA}, 0x18DB33F1). Math authoritative; module address map caveated.
-- [ ] 2.2 ReadDataByIdentifier (0x22) across modules (multi-module whole-car walk)
+- [x] 2.2 ReadDataByIdentifier across modules — whole-car walk (`services/module_scan.py`):
+      connect per module, read identification DIDs, present/absent detection, text report
 - [ ] 3.1 Bidirectional: IOControl (0x2F) + RoutineControl (0x31) scaffolding
 - [ ] 3.2 Whole-car scan → health report
 - [ ] 3.3 CLI + live dashboard + CSV/SQLite logging
@@ -93,3 +94,9 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   end-to-end (transport→ISO-TP→UDS on 0x18DA72F1). Two fixture bugs self-caught: passed the
   11-bit id 0x720 where a 29-bit target *byte* was required — the byte-range validation rejected
   it; fixed the fixtures, not the assertions (114 total, `Ran 114 tests … OK`).
+- **Iter 8** — Whole-car module scan (`services/module_scan.py`, first `services/` layer).
+  `scan_vehicle` connects a `UdsClient` per module, reads the 6 standard identification DIDs,
+  and classifies present (answered positive OR negative) vs absent (silence); `format_scan_report`
+  renders it. Added reusable `isotp.multiplex` to host many ECUs on one simulated bus. +4 tests:
+  present w/ identifiers, absent detection, present-but-no-DIDs, report format (118 total,
+  `Ran 118 tests … OK`). Next: bidirectional actuator tests (3.1).

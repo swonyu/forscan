@@ -27,7 +27,7 @@ from .socket import (
     IsoTpSequenceError,
     stmin_to_seconds,
 )
-from .simulated_ecu import SimulatedIsoTpEcu
+from .simulated_ecu import SimulatedIsoTpEcu, multiplex
 
 __all__ = [
     "IsoTpFrameType",
@@ -50,4 +50,5 @@ __all__ = [
     "IsoTpSequenceError",
     "stmin_to_seconds",
     "SimulatedIsoTpEcu",
+    "multiplex",
 ]

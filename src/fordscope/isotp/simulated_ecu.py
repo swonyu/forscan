@@ -14,7 +14,7 @@ tested separately with a scripted responder.
 """
 from __future__ import annotations
 
-from typing import Callable, Optional, Tuple
+from typing import Callable, Iterable, Optional, Tuple
 
 from ..transport.base import CanFrame
 from .frames import (
@@ -129,3 +129,19 @@ class SimulatedIsoTpEcu:
             sn = (sn + 1) & 0x0F
         self._tx_rest = b""
         return tuple(frames)
+
+
+def multiplex(*responders: Callable[[CanFrame], Iterable[CanFrame]]):
+    """Combine several ECU responders onto one simulated bus.
+
+    Each responder ignores frames not addressed to it (returns nothing), so only
+    the module matching a request replies — modelling several ECUs sharing a bus.
+    """
+
+    def _combined(frame: CanFrame) -> Tuple[CanFrame, ...]:
+        replies: list[CanFrame] = []
+        for responder in responders:
+            replies.extend(responder(frame))
+        return tuple(replies)
+
+    return _combined
