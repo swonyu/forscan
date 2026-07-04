@@ -32,7 +32,9 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
       checking. SAFETY: actuates real hardware; simulator-tested only, on-car use is NEEDS ON-CAR CHECK
 - [x] 3.2 Whole-car DTC report (`services/dtc_scan.py`): UDS ReadDTCInformation (0x19) per module,
       aggregated + described (via DTC DB) + present/absent; `format_dtc_report`, `total_dtc_count`
-- [ ] 3.3 CLI + live dashboard + CSV/SQLite logging
+- [x] 3.3 CLI (`fordscope/cli.py`, `python -m fordscope`): scan / dtc / read <pid> / vin / clear-dtc
+      against a simulated demo vehicle; real backends refuse honestly. (live dashboard + CSV/SQLite
+      logging deferred as optional follow-up — core CLI shipped)
 
 ## Phase 2 — As-Built coding (Tier 4)
 - [ ] 4.1 Backup-before-write engine (persist original block, one-click restore)
@@ -113,3 +115,9 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   aggregates across modules, pairs codes with DTC-DB descriptions, flags confirmed/pending,
   present/absent. +7 tests (132 total, `Ran 132 tests … OK`). One self-caught test bug: imported
   `IsoTpSocket` from the wrong module; removed it. Next: CLI (3.3).
+- **Iter 11** — CLI (`cli.py` + `__main__.py`): `python -m fordscope {scan,dtc,read,vin,clear-dtc}`
+  against a simulated demo Ford (PCM+BCM+ABS present, APIM absent); every command prints a
+  SIMULATED banner; `--backend slcan/openport` refuses honestly (exit 2) instead of faking a
+  connection. +9 tests AND a live run (scan/dtc/read/vin/backend-guard all verified by execution).
+  **Phase 1 (Tiers 0–3) core complete.** 141 total, `Ran 141 tests … OK`. Next: **Phase 2 —
+  As-Built coding** (4.1 backup-before-write engine).
