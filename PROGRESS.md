@@ -850,6 +850,18 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   `test_silent_bus_surfaces_clean_error_not_a_hang` (slcan). This is the robustness that decides
   whether the GUI cleanly says "no response" or freezes on the first real query. +2 tests →
   **433 green**.
+- **Iter 112** (29-bit extended addressing proven end-to-end — the As-Built path) — A genuinely
+  DIFFERENT code path from the 11-bit thread: Ford ENHANCED diagnostics (the As-Built coding half of
+  the tool's name) use 29-bit addressing `0x18DA{TA}{SA}`, which is a distinct elm327 branch (the
+  4-token extended header parse) + extended ISO-TP framing. Confirmed it's a REAL used path
+  (`ford/addressing.py extended_module()` returns `is_extended=True` pairs, exported/public) that was
+  unit-tested in isolation but NEVER composed end-to-end — every prior integration test was 11-bit.
+  Verified empirically, then added `test_extended_29bit_uds_read_end_to_end`: a UDS
+  `ReadDataByIdentifier(0xF190)` over the REAL `extended_module(0x10)` pair (0x18DA10F1/0x18DAF110)
+  decodes `b"123"` through the whole extended stack (elm327 4-token parse → extended ISO-TP → UDS).
+  elm327 only — it's the owner's vLinker FS and carries the trickier multi-token parse; slcan's
+  extended form is a simpler single 8-hex token already unit-tested (replicating there = padding).
+  +1 test → **434 green**. (Live 29-bit handshake stays NEEDS ON-CAR CHECK.)
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the

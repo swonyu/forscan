@@ -16,6 +16,8 @@ from fordscope.transport import (
 )
 from fordscope.isotp import IsoTpSocket
 from fordscope.obd import ObdClient, ObdError
+from fordscope.uds import UdsClient
+from fordscope.ford import extended_module
 
 
 class ScriptedElmPort:
@@ -226,6 +228,27 @@ class Elm327EndToEndReadTests(unittest.TestCase):
         with self.assertRaises(ObdError) as ctx:
             obd.current_data(0x0C)
         self.assertIn("no response", str(ctx.exception))
+
+    def test_extended_29bit_uds_read_end_to_end(self):
+        # Ford ENHANCED diagnostics (the As-Built half of the tool) use 29-bit
+        # addressing (0x18DA{TA}{SA}) -- a DISTINCT elm327 code path (the 4-token
+        # extended header parse) and extended ISO-TP framing, never composed
+        # end-to-end before (every prior integration test was 11-bit). A UDS
+        # ReadDataByIdentifier over the REAL extended_module() pair must decode
+        # through the whole extended stack. (elm327 only: it is the owner's vLinker
+        # FS and carries the trickier multi-token header parse; slcan's extended
+        # form is a simpler single 8-hex token, already unit-tested.)
+        pair = extended_module(0x10, name="PCM-ext")
+        self.assertTrue(pair.is_extended)
+        self.assertEqual((pair.request_id, pair.response_id), (0x18DA10F1, 0x18DAF110))
+        t = Elm327Transport(
+            ScriptedElmPort(["18 DA F1 10 06 62 F1 90 31 32 33 00"]), protocol="7"
+        )
+        t.open()
+        uds = UdsClient(IsoTpSocket(
+            t, tx_id=pair.request_id, rx_id=pair.response_id, is_extended=pair.is_extended
+        ))
+        self.assertEqual(uds.read_data_by_identifier(0xF190), b"123")
 
 
 if __name__ == "__main__":
