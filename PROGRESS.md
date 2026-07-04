@@ -464,3 +464,16 @@ feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and 
   returned a short/truncated VIN as if complete — now null-stripped and validated to exactly 17
   chars, raising `ObdError` otherwise. +2 tests (truncated-CALID-tail, 9-char VIN), RED-first.
   Remaining audit findings queued: #2 UDS P2* timeout, #3 serial-fd leak, #5 As-Built bounds.
+- **Iter 56** — Audit finding #2 (HIGH, spec): `UdsClient.request` reused the short P2 timeout
+  after responsePending (0x78), aborting legit long ops. Added `p2_star_timeout` (default 5.0s,
+  ISO 14229 P2*server_max) and switch to it after the first 0x78. +1 test (recording socket
+  asserts recv timeouts [1.0, 5.0]). 366 green.
+- **Iter 57** — Audit finding #3 (HIGH, resource): `Elm327Transport.close()`/`SlcanTransport.close()`
+  never closed the underlying serial fd (leaked one per connect/disconnect on the success path).
+  Added `base.close_port()` (guarded, error-swallowing) called from both. +2 tests. 368 green.
+- **Iter 58** — Audit finding #5 (MED, verified before acting): `_read_value` with a negative
+  `byte_index` silently returned the WRONG byte as the feature value — now bounds-guarded (raises).
+  The finding's `set_nibble` "silent corruption" claim did NOT reproduce (it already raised
+  IndexError); added a validate-before-read guard for write-path defense-in-depth + clearer message,
+  honestly logged as hardening not a corruption fix. +2 tests. 370 green. **All 5 seen findings
+  closed; re-running the audit to confirm + catch anything past the truncated #5.**
