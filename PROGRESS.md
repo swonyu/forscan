@@ -35,6 +35,15 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
 ## Phase 3 — Reflashing (Tier 5, gated)
 - [ ] 5.1 Flashing state machine (0x27/0x34/0x36/0x37), stubbed — needs FDRS keys/calibrations
 
+## Tooling
+- [x] `fordscope-build` skill (`.claude/skills/`) + project `CLAUDE.md` — the build protocol,
+      verify command, layering, and hard legal/safety boundaries. Authored RED→GREEN via the
+      writing-skills discipline: RED baselines showed the *honesty* discipline is already
+      ambient (so no discipline skill written — it would be redundant); the real gap was the
+      repo-specific protocol + automotive boundaries, so it ships as a reference skill,
+      GREEN-verified (a skill-equipped agent correctly refused an emissions-defeat feature and
+      an untested-hardware "it works" claim).
+
 ## Iteration log
 - **Iter 1** — Scaffolded repo, spec (`docs/DESIGN.md`), this log. Built Tier 0: `CanFrame`
   (validated, frozen, 11/29-bit) + `Transport` ABC (context-manager) + `SimulatorTransport`
