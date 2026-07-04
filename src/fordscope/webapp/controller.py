@@ -4,9 +4,18 @@ No HTTP or GUI here: it lists serial ports, connects a backend, and runs the
 diagnostic commands, returning plain data. Reuses the CLI's ``open_backend`` so
 the simulator / elm327 (vLinker FS) / slcan paths and the honesty banner are
 identical to the terminal tool.
+
+Thread-safety: one controller (hence one shared transport) serves every
+``ThreadingHTTPServer`` worker thread, and the dashboard polls /api/live every
+second while the user can click other actions — so two threads would otherwise
+interleave request/response frames on the one serial line. Every public method
+is serialized on a single **reentrant** lock (reentrant because composite methods
+like ``health_report`` call the others, and ``connect`` calls ``disconnect``).
 """
 from __future__ import annotations
 
+import functools
+import threading
 from typing import List, Optional
 
 from ..cli import open_backend, list_serial_ports
@@ -38,17 +47,30 @@ class NotConnectedError(RuntimeError):
     pass
 
 
+def _synchronized(method):
+    """Serialize a controller method on its reentrant lock (one shared transport)."""
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return wrapper
+
+
 class FordScopeController:
     def __init__(self, *, port_factory=None) -> None:
         self.port_factory = port_factory  # inject a fake serial for tests
         self.transport = None
         self.modules = None
         self.banner: Optional[str] = None
+        self._lock = threading.RLock()
 
     @property
     def connected(self) -> bool:
         return self.transport is not None
 
+    @_synchronized
     def connect(self, port: str, *, profile: Optional[str] = None) -> str:
         """Connect the demo simulator or a real serial adapter. Returns the banner."""
         self.disconnect()
@@ -64,6 +86,7 @@ class FordScopeController:
             )
         return self.banner
 
+    @_synchronized
     def disconnect(self) -> None:
         if self.transport is not None:
             try:
@@ -81,14 +104,17 @@ class FordScopeController:
     def _obd(self) -> ObdClient:
         return ObdClient(IsoTpSocket(self.transport, tx_id=0x7E0, rx_id=0x7E8))
 
+    @_synchronized
     def scan(self) -> str:
         self._require()
         return format_scan_report(scan_vehicle(self.transport, self.modules))
 
+    @_synchronized
     def dtc(self) -> str:
         self._require()
         return format_dtc_report(scan_vehicle_dtcs(self.transport, self.modules))
 
+    @_synchronized
     def read_pid(self, pid: int) -> dict:
         self._require()
         try:
@@ -106,6 +132,7 @@ class FordScopeController:
                 "note": "not supported by this ECU",
             }
 
+    @_synchronized
     def live(self, pids) -> list:
         """One live-data sample across several PIDs. Unsupported/undecodable PIDs
         return value=None (blank) rather than failing the whole sample."""
@@ -120,10 +147,12 @@ class FordScopeController:
                 rows.append({"pid": pid, "name": f"PID {pid:02X}", "value": None, "unit": ""})
         return rows
 
+    @_synchronized
     def vin(self) -> str:
         self._require()
         return self._obd().read_vin()
 
+    @_synchronized
     def supported_pids(self) -> list:
         """Which data PIDs the ECU reports, each named if FordScope can decode it.
         The meta range-marker PIDs (0x00/0x20/…) are omitted."""
@@ -141,6 +170,7 @@ class FordScopeController:
             })
         return rows
 
+    @_synchronized
     def health_report(self) -> str:
         """A shareable text snapshot: VIN, readiness, whole-car DTCs, freeze frame.
         Each section is independent — one failing section is noted, not fatal."""
@@ -183,6 +213,7 @@ class FordScopeController:
 
         return "\n".join(lines)
 
+    @_synchronized
     def readiness(self) -> dict:
         """I/M readiness: MIL, DTC count, inspection-readiness + which monitors aren't complete."""
         self._require()
@@ -194,6 +225,7 @@ class FordScopeController:
             "not_ready": ms.not_ready,
         }
 
+    @_synchronized
     def freeze_frame(self, pids=None) -> dict:
         """The freeze frame: the DTC that triggered it + frozen PID values."""
         self._require()
@@ -208,6 +240,7 @@ class FordScopeController:
                 pass  # this PID isn't in the freeze frame -> omit
         return {"dtc": dtc, "rows": rows}
 
+    @_synchronized
     def log_csv(self, pids, samples: int = 10) -> str:
         """Capture ``samples`` fast readings of ``pids`` and return CSV text.
         (A burst capture; the CLI `log --interval` does timed drive logs.)"""
@@ -216,6 +249,7 @@ class FordScopeController:
         rows = DataLogger(self._obd(), pids).run(samples, interval=0.0)
         return rows_to_csv(rows, pids)
 
+    @_synchronized
     def clear_dtcs(self) -> None:
         """Clear stored trouble codes (OBD Mode 04) — a real mutating action; the
         UI gates it behind a confirm dialog."""

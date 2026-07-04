@@ -6,7 +6,9 @@ the live serial path is NEEDS ON-CAR CHECK.
 import http.client
 import json
 import threading
+import time
 import unittest
+from types import SimpleNamespace
 
 from fordscope.webapp.controller import FordScopeController, NotConnectedError, DEMO_PORT, list_ports
 from fordscope.webapp.server import create_server
@@ -305,6 +307,62 @@ class ServerTests(unittest.TestCase):
     def test_report_download_before_connect_409(self):
         status, _raw = self._req("GET", "/api/report.txt")
         self.assertEqual(status, 409)
+
+
+class ConcurrencyTests(unittest.TestCase):
+    """One `FordScopeController` (hence one shared transport) serves every
+    `ThreadingHTTPServer` worker thread. The built-in dashboard polls /api/live
+    every second while the user can click scan/read — so two threads WILL touch
+    the one serial line at once. Access must be serialized, or their request/
+    response frames interleave and corrupt each other on real hardware."""
+
+    def _gated_controller(self):
+        """A controller whose OBD op parks a thread mid-flight on an event, so a
+        test can observe whether a second thread enters the critical section."""
+
+        class _GatedController(FordScopeController):
+            def __init__(self):
+                super().__init__()
+                self.transport = object()  # look connected without real hardware
+                self.reached = threading.Event()
+                self.release = threading.Event()
+                self.active = 0
+                self.max_active = 0
+                self._counter = threading.Lock()
+
+            def _obd(self):
+                outer = self
+
+                class _Obd:
+                    def current_data(self, pid):
+                        with outer._counter:
+                            outer.active += 1
+                            outer.max_active = max(outer.max_active, outer.active)
+                        outer.reached.set()
+                        outer.release.wait(timeout=2.0)
+                        with outer._counter:
+                            outer.active -= 1
+                        return SimpleNamespace(name="x", value=1, unit="")
+
+                return _Obd()
+
+        return _GatedController()
+
+    def test_transport_access_is_serialized(self):
+        c = self._gated_controller()
+        t1 = threading.Thread(target=lambda: c.read_pid(0x0C), daemon=True)
+        t1.start()
+        self.assertTrue(c.reached.wait(1.0))  # t1 is parked inside the critical section
+        t2 = threading.Thread(target=lambda: c.read_pid(0x0D), daemon=True)
+        t2.start()
+        time.sleep(0.3)  # generous window for t2 to (try to) enter
+        observed_max = c.max_active  # sampled while t1 is still parked
+        c.release.set()
+        t1.join(2.0)
+        t2.join(2.0)
+        self.assertEqual(
+            observed_max, 1, "a second thread entered the shared transport concurrently"
+        )
 
 
 if __name__ == "__main__":

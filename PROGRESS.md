@@ -381,3 +381,15 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   (E) `log_csv` clamps `samples` to ≥1, so a negative count yields one row, not a silent
   header-only file. +6 tests (controller + HTTP for each), all RED-first. Concurrency finding
   (shared transport across `ThreadingHTTPServer` threads) still queued for iter 48.
+- **Iter 48** — Concurrency fix (the last iter-46 auditor finding; 343 green). One
+  `FordScopeController` (one shared transport) serves every `ThreadingHTTPServer` worker,
+  and the dashboard polls `/api/live` every second while the user can click scan/read — so
+  two threads interleaved `send`/`recv` on the one serial line (frame cross-talk / corrupt
+  reads on real hardware; masked on the in-process simulator). Fix: every public controller
+  method serialized on a single **reentrant** `RLock` via a `_synchronized` decorator
+  (reentrant is required — `health_report` calls `vin`/`dtc`/`freeze_frame`, `connect` calls
+  `disconnect`). Test-first with a deterministic (non-flaky, verified 5×) gated-controller
+  probe that parks one thread mid-critical-section and proves a second can't enter
+  (`max_active == 1`). **All four iter-46 auditor findings now closed.** [The corruption
+  itself is NEEDS ON-CAR CHECK — only real hardware exhibits it; the lock is the correct
+  guard and is proven to serialize.]
