@@ -46,6 +46,7 @@ INDEX_HTML = """<!doctype html>
   <button onclick="showFreeze()">Freeze frame</button>
   <button onclick="showReadiness()">Readiness</button>
   <button onclick="showReport()">Health report</button>
+  <button onclick="window.location='/api/report.txt'">Download report</button>
   <button onclick="clearDtc()">Clear codes</button>
   <input id="pid" value="0C" size="4"><button onclick="readPid()">Read PID (hex)</button>
 </div>
@@ -141,14 +142,17 @@ def _make_handler(controller: FordScopeController):
             self.end_headers()
             self.wfile.write(body)
 
-        def _csv(self, text, filename="fordscope-log.csv"):
+        def _download(self, text, filename, content_type):
             body = text.encode()
             self.send_response(200)
-            self.send_header("Content-Type", "text/csv")
+            self.send_header("Content-Type", content_type)
             self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+
+        def _csv(self, text, filename="fordscope-log.csv"):
+            self._download(text, filename, "text/csv")
 
         def _body_json(self):
             length = int(self.headers.get("Content-Length", 0) or 0)
@@ -185,6 +189,10 @@ def _make_handler(controller: FordScopeController):
                     return self._json({**controller.readiness(), "banner": controller.banner})
                 if u.path == "/api/report":
                     return self._json({"report": controller.health_report(), "banner": controller.banner})
+                if u.path == "/api/report.txt":
+                    return self._download(
+                        controller.health_report(), "fordscope-health-report.txt", "text/plain"
+                    )
                 if u.path == "/api/log":
                     q = parse_qs(u.query)
                     pids = [int(p, 16) for p in q.get("pids", ["0C,05,0D"])[0].split(",") if p.strip()]

@@ -236,6 +236,17 @@ class ServerTests(unittest.TestCase):
         status, _raw = self._req("GET", "/api/read?pid=zz")
         self.assertEqual(status, 400)
 
+    def test_report_download(self):
+        self._json("POST", "/api/connect", {"port": DEMO_PORT})
+        status, raw = self._req("GET", "/api/report.txt")
+        self.assertEqual(status, 200)
+        self.assertIn(b"VIN:", raw)
+        self.assertIn(b"P0143", raw)
+
+    def test_report_download_before_connect_409(self):
+        status, _raw = self._req("GET", "/api/report.txt")
+        self.assertEqual(status, 409)
+
 
 if __name__ == "__main__":
     unittest.main()

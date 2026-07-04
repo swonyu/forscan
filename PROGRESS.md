@@ -314,6 +314,10 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   DRY'd to reuse it. `FIRST_RUN.md`: accurate on-car first-connection guide (find port → elm327
   scan/vin → the Mac app), commands verified vs `--help`, with the LIVE-UNVALIDATED framing and
   troubleshooting. +2 tests. 326 total, `Ran 326 tests … OK`.
+- **Iter 42** — Downloadable health report. Generalized the CSV helper into `_download(text,
+  filename, content_type)`; `GET /api/report.txt` serves the health report as a `text/plain`
+  attachment + a "Download report" button — save a dated diagnostic record / send to a mechanic.
+  +2 tests; verified by running (200, text/plain, attachment filename). 328 total, `Ran 328 … OK`.
 - **Iter 27** — Completed adversarial review coverage (CLI + scan services, the last un-reviewed
   logic). **1 more real bug found & fixed test-first** (268 total green): `scan_module` /
   `scan_module_dtcs` only caught `UdsError`, but `IsoTpSocket` raises a separate `IsoTpError`
