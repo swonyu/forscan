@@ -759,6 +759,17 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   `test_fuel_pressure`, `test_vehicle_speed`. +3 tests → **423 green**. The Mode-06 decode, monitor
   readiness (`ready`/`not_ready`, incl. the fully-inspection-ready positive path), and supported-PIDs
   bit-ordering were all AUDITED this fire and found already solid + covered — no change made there.
+- **Iter 104** (VIN corruption-rejection trio completed — one missing distinct branch) — Swept the
+  OBD client's Mode-09 decode (`read_vin`, `_text_items`, `read_cvns`, `read_ecu_names`): found it
+  comprehensively covered (multiframe VIN, truncated VIN, non-ASCII byte, multiple CALIDs, over-long
+  seed, truncated-partial-dropped, corrupt-item-dropped, CVN hex, ECU names, unsupported-raises). ONE
+  distinct branch of `read_vin`'s guard `if len(vin) != 17 or not vin.isalnum()` was untested: the
+  `not vin.isalnum()` leg — 17 clean-ASCII bytes with an embedded punctuation char (e.g. `*`) decodes
+  WITHOUT a UnicodeDecodeError, so the length guard and decode guard both pass, and only `isalnum()`
+  stops a garbage VIN from being surfaced as the vehicle's identity. Confirmed empirically that
+  without the guard the bogus `'1FMHK8D89*BA12345'` is returned, then added
+  `test_read_vin_rejects_nonalphanumeric_ascii_same_length` — the third sibling of the truncated /
+  non-ASCII rejection tests. +1 test → **424 green**.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the

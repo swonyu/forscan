@@ -329,6 +329,22 @@ class ObdClientTests(unittest.TestCase):
         with self.assertRaises(ObdError):
             ObdClient(_Scripted()).read_vin()
 
+    def test_read_vin_rejects_nonalphanumeric_ascii_same_length(self):
+        # The THIRD corruption class, sibling to truncated-length and non-ASCII-byte:
+        # 17 clean-ASCII bytes where one is punctuation decodes WITHOUT a
+        # UnicodeDecodeError, yet is not a valid VIN. The distinct `not vin.isalnum()`
+        # guard (not the length guard, not the decode guard) must reject it -- else a
+        # garbage VIN like '1FMHK8D89*BA12345' would be surfaced as the vehicle's identity.
+        class _Scripted:
+            def send(self, payload):
+                pass
+
+            def recv(self, timeout=1.0):
+                return bytes([0x49, 0x02, 0x01]) + b"1FMHK8D89*BA12345"  # '*' = 0x2A
+
+        with self.assertRaises(ObdError):
+            ObdClient(_Scripted()).read_vin()
+
     def test_text_items_drops_corrupted_item_not_fabricated(self):
         # An item with a corrupt (non-ASCII) byte must be dropped, not surfaced as a
         # calibration ID with a U+FFFD baked in.
