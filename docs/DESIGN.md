@@ -21,14 +21,15 @@ tests, and As-Built feature coding.
 
 ## 3. Architecture — strict layers, each independently testable
 ```
-app / CLI / dashboards
+CLI  +  webapp (local browser UI — the native-macOS app)
    └── services: whole-car scan, DTC report, live data, As-Built coding
-        └── obd (SAE J1979)      uds (ISO 14229)
+        └── obd (SAE J1979: PIDs, DTCs+states, Mode 06, Mode 09 CALID/CVN,
+        │        readiness + drive-cycle coach)      uds (ISO 14229)
              └── isotp (ISO 15765-2 segmentation)
                   └── transport (CanFrame + Transport ABC)
                        ├── SimulatorTransport   (no hardware — always available)
-                       ├── SlcanTransport       (CANable / slcan dongle)   [later]
-                       └── OpenportTransport     (Tactrix, macOS-native)     [later]
+                       ├── SlcanTransport       (CANable / slcan dongle)
+                       └── Elm327Transport      (ELM327 / OBDLink EX / Vgate vLinker FS)
 ```
 Rule: nothing above `transport` knows which backend is attached. The simulator is a
 first-class backend, not a test mock — it makes the product runnable with zero hardware.
@@ -40,6 +41,11 @@ first-class backend, not a test mock — it makes the product runnable with zero
 - **Phase 2 — As-Built coding (Tier 4).** backup-before-write engine → As-Built
   read/decode → guarded write with read-back verify + rollback.
 - **Phase 3 — Reflashing (Tier 5).** flashing state machine, gated behind FDRS keys.
+- **Phase 4 — Native macOS GUI (no Windows VM).** A local web app (stdlib `http.server` +
+  one embedded browser page) driving the `Elm327Transport`/vLinker-FS backend: connect,
+  whole-car scan, live dashboard with SVG **sparkline graphs** + session min/max/avg,
+  calibration, DTC states, readiness + drive-cycle coach, Mode 06, and a shareable health
+  report. Packaged as a double-clickable `.app` (scaffolded, UNVERIFIED — `docs/PACKAGING.md`).
 
 ## 5. Safety invariants
 - **Backup-before-write:** no configuration write is permitted unless the module's

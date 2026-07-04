@@ -644,3 +644,9 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   session stats). Now accurate + a Mac-app quick-start + the `ports` command + the packaging pointer.
   Every claim VERIFIED against the code (PID count, endpoints, subcommands, test count), not memory.
   412 green. **The tool is complete; the loop is now in maintenance mode — no features to manufacture.**
+- **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
+  listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
+  (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the
+  whole native-macOS web app). Corrected the layer diagram (real backends, webapp top layer, the
+  richer obd surface) + added Phase 4. `FIRST_RUN.md` checked — already current (leave it). Docs-
+  currency sweep now complete (README iter 88, DESIGN iter 89, FIRST_RUN current). 412 green.
