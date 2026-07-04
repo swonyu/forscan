@@ -14,6 +14,36 @@ from fordscope.transport import (
     payload_line,
     parse_response_line,
 )
+from fordscope.isotp import IsoTpSocket
+from fordscope.obd import ObdClient
+
+
+class ScriptedElmPort:
+    """A fake vLinker-FS adapter for END-TO-END reads: it returns a ``>`` prompt to
+    every ``AT`` command, and after each pure-hex (OBD/ISO-TP) payload it emits the
+    next queued ELM327 response block (headers-on / spaces-on format). This lets a
+    real Elm327Transport -> IsoTpSocket -> ObdClient stack run against scripted
+    adapter output, with no hardware. Multi-line blocks (``\\r``-joined) model an
+    adapter returning several CAN frames (e.g. consecutive frames) in one read."""
+
+    def __init__(self, response_blocks) -> None:
+        self._blocks = list(response_blocks)
+        self._armed = None
+
+    def write(self, data: bytes) -> int:
+        text = bytes(data).decode("ascii", "ignore").strip()
+        if text and not text.upper().startswith("AT") and self._blocks:
+            self._armed = self._blocks.pop(0)  # a non-AT payload arms the next reply
+        return len(data)
+
+    def read(self, size: int = 1) -> bytes:
+        if self._armed is not None:
+            block, self._armed = self._armed, None
+            return (block + "\r>").encode("ascii")
+        return b">"
+
+    def close(self) -> None:
+        pass
 
 
 class FakeSerial:
@@ -158,6 +188,34 @@ class TransportTests(unittest.TestCase):
         self.assertIsNotNone(frame)
         self.assertEqual(frame.arbitration_id, 0x7E8)
         self.assertEqual(len(frame.data), 8)
+
+
+class Elm327EndToEndReadTests(unittest.TestCase):
+    """The real-adapter path proven as an INTEGRATED read, not just per-layer units:
+    scripted ELM327 lines -> Elm327Transport parse -> IsoTpSocket reassembly ->
+    ObdClient decode -> a correct value. Each layer was unit-tested in isolation;
+    nothing exercised their composition through the real wire codec until here."""
+
+    def _obd(self, response_blocks):
+        t = Elm327Transport(ScriptedElmPort(response_blocks))
+        t.open()
+        return ObdClient(IsoTpSocket(t, tx_id=0x7E0, rx_id=0x7E8))
+
+    def test_single_frame_read_rpm_end_to_end(self):
+        # ECU single-frame reply to Mode 01 PID 0C: PCI 04, [41 0C 0F A0], padded.
+        obd = self._obd(["7E8 04 41 0C 0F A0 00 00 00"])
+        r = obd.current_data(0x0C)
+        self.assertEqual((r.name, r.value, r.unit), ("Engine RPM", 1000.0, "rpm"))
+
+    def test_multiframe_vin_read_end_to_end(self):
+        # Multiframe VIN exercises the HARDER integration: the client's flow-control
+        # frame goes DOWN through elm327 send, and the consecutive frames come UP
+        # through elm327 recv. FF (49 02 01 '1F M') then CF1 'HK8D89A' + CF2 'BA12345'.
+        obd = self._obd([
+            "7E8 10 14 49 02 01 31 46 4D",
+            "7E8 21 48 4B 38 44 38 39 41\r7E8 22 42 41 31 32 33 34 35",
+        ])
+        self.assertEqual(obd.read_vin(), "1FMHK8D89ABA12345")
 
 
 if __name__ == "__main__":

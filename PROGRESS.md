@@ -817,6 +817,18 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   builds the real `Elm327Transport` AND surfaces the honest UNVALIDATED/NEEDS-ON-CAR banner, never
   `SIMULATED` — the safety property that a user on a real adapter is not misled into trusting an
   unvalidated live path. No hardware needed. +1 test → **427 green**.
+- **Iter 109** (real-adapter path proven as an INTEGRATED read — "verify the integrated artifact"
+  applied to elm327) — The elm327 codec was unit-tested (line parse, send/recv over an injected port)
+  and ISO-TP/OBD were tested over the SIMULATOR transport, but NOTHING exercised their COMPOSITION
+  through the real wire codec — the exact class of gap that hid the dashboard-JS bug for ~60 iters
+  ("each layer works" ≠ "the stack works"). Added `Elm327EndToEndReadTests` with a `ScriptedElmPort`
+  fake vLinker-FS (`>` to AT cmds; emits queued ELM327 response blocks after each OBD payload) driving
+  a real `Elm327Transport → IsoTpSocket → ObdClient` stack: (1) single-frame Mode-01 PID 0C read →
+  decodes RPM 1000.0; (2) MULTIFRAME VIN read → `1FMHK8D89ABA12345`, which exercises the harder
+  integration — the client's flow-control frame goes DOWN through elm327 send and the consecutive
+  frames come UP through elm327 recv. Both verified empirically first. No hardware. +2 tests →
+  **429 green**. (The elm327 *live timing/handshake* is still NEEDS ON-CAR CHECK; this proves the
+  codec composition, not the physical device.)
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the
