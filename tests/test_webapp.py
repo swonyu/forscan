@@ -99,6 +99,16 @@ class ControllerTests(unittest.TestCase):
         self.assertIn("To complete them", report)
         self.assertIn("•", report)  # a guidance bullet per not-ready monitor
 
+    def test_health_report_includes_mode06_monitor_tests(self):
+        # The shareable snapshot should include emission-monitor self-test verdicts
+        # (Mode 06). Demo: catalyst passes, EGR fails.
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        report = c.health_report()
+        self.assertIn("Emission monitor self-tests", report)
+        self.assertIn("Catalyst Monitor Bank 1: PASS", report)
+        self.assertIn("EGR Monitor Bank 1: FAIL", report)
+
     def test_calibration(self):
         c = FordScopeController()
         c.connect(DEMO_PORT)

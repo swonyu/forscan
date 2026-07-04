@@ -356,6 +356,17 @@ class FordScopeController:
             lines.append("Freeze frame: (unavailable)")
 
         try:
+            monitors = self.monitor_tests()
+            if monitors:
+                lines.append("")
+                lines.append("Emission monitor self-tests (Mode 06):")
+                for m in monitors:
+                    verdict = "PASS" if all(t["passed"] for t in m["tests"]) else "FAIL"
+                    lines.append(f"  {m['category']}: {verdict}")
+        except Exception:
+            pass  # Mode 06 not supported / read failed — omit the section
+
+        try:
             stats = self.live_stats()
             if stats:
                 lines.append("")
