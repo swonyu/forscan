@@ -187,6 +187,17 @@ class DtcCodecTests(unittest.TestCase):
     def test_decode_dtcs_empty(self):
         self.assertEqual(decode_dtcs(bytes([0x00])), [])
 
+    def test_decode_dtcs_survives_lying_count_and_ragged_data(self):
+        # A glitching/truncated ECU can return a count byte that OVER-claims, or a
+        # multi-frame body cut off mid-pair. decode_dtcs must skip-and-continue and
+        # never IndexError, so one bad module can't crash the whole-car DTC scan.
+        # The min(len(pairs)-odd, count*2) cap is load-bearing: an UNcapped loop
+        # (range(0, count*2, 2)) IndexErrors on the first case below.
+        self.assertEqual(decode_dtcs(bytes([0x05, 0x01, 0x43])), ["P0143"])          # count over-claims
+        self.assertEqual(decode_dtcs(bytes([0x01, 0x01, 0x43, 0x01])), ["P0143"])    # odd tail dropped
+        self.assertEqual(decode_dtcs(bytes([0x02, 0x01, 0x43, 0x00, 0x00])), ["P0143"])  # 0000 pad skipped
+        self.assertEqual(decode_dtcs(bytes([0x00, 0x01, 0x43])), [])                 # count 0 wins over pairs
+
 
 class SupportedPidsTests(unittest.TestCase):
     def test_decode_single_pids(self):

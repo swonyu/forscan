@@ -738,6 +738,17 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   and proved teeth BY MEASUREMENT: neutralizing the ECU-side `& 0xFF` makes block 256 fail with
   `0x73 wrongBlockSequenceCounter`. +1 test → **419 green**. (Reflash stays protocol-only / not
   CLI-exposed — this hardens correctness of code that already exists, no new surface.)
+- **Iter 102** (DTC-scan resilience to a glitching ECU — untested corruption boundary) — Audited the
+  DTC decode path (`obd/pids.py`): `decode_dtc`/`encode_dtc` are correct AND well-covered (all four
+  P/C/B/U letters, C/B/U roundtrips, malformed rejection — no gap); the caller correctly strips the
+  SID (`decode_dtcs(resp[1:])`). But `decode_dtcs` only tested a clean block + empty. The real
+  untested boundary is a **lying/oversized count byte** or a truncated multi-frame body — where the
+  `min(len(pairs)−odd, count*2)` cap is the ONLY thing stopping an `IndexError` that would crash the
+  *whole-car* scan on one bad module (the skip-and-continue contract). Confirmed the robust behavior
+  empirically, proved the cap's teeth BY MEASUREMENT (an uncapped `range(0,count*2,2)` IndexErrors on
+  a lying count), then added `test_decode_dtcs_survives_lying_count_and_ragged_data` pinning four
+  cases: over-claiming count, odd trailing byte dropped, `0000` pad skipped, count-0-wins. +1 test →
+  **420 green**.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the
