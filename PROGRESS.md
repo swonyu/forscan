@@ -329,6 +329,12 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   Mode 02 freeze-frame framing). **NO bugs found** — every formula verified vs SAE J1979, the
   monitor bit-tables cross-checked against primary sources by the reviewer. Clean; no code change.
   Reviews now cover the whole codebase across 4 rounds (6 real bugs total, all in earlier code).
+- **Iter 45** — Widened the DTC-definition database 36 → **90** well-established SAE J2012 generic
+  codes (MAP/IAT/ECT/TPS circuits, O2 sensors bank1/2, injectors, misfire 5/6, cam/crank timing,
+  ignition coils, EGR/secondary-air/EVAP leaks, catalyst, idle/voltage/module, transmission
+  range/speed/TCC/shift solenoids, U-network TCM/BCM/IPC). Only confident code→meaning mappings
+  added; +2 tests (sample lookups + coverage). More of a real car's codes come back named instead
+  of the structural fallback. 332 total, `Ran 332 tests … OK`.
 - **Iter 27** — Completed adversarial review coverage (CLI + scan services, the last un-reviewed
   logic). **1 more real bug found & fixed test-first** (268 total green): `scan_module` /
   `scan_module_dtcs` only caught `UdsError`, but `IsoTpSocket` raises a separate `IsoTpError`

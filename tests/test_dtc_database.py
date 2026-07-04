@@ -28,6 +28,18 @@ class CuratedLookupTests(unittest.TestCase):
         self.assertEqual(describe_dtc("U0100").system, "Network")
         self.assertEqual(describe_dtc("C0035").system, "Chassis")
 
+    def test_added_curated_codes(self):
+        self.assertIn("Torque Converter", describe_dtc("P0741").definition)
+        self.assertIn("Very Small Leak", describe_dtc("P0456").definition)
+        self.assertIn("Injector", describe_dtc("P0201").definition)
+        info = describe_dtc("U0155")
+        self.assertEqual(info.system, "Network")
+        self.assertIn("Instrument Panel Cluster", info.definition)
+
+    def test_database_has_broad_coverage(self):
+        from fordscope.obd.dtc_database import DTC_DEFINITIONS
+        self.assertGreater(len(DTC_DEFINITIONS), 70)
+
 
 class FallbackHonestyTests(unittest.TestCase):
     def test_uncurated_code_gets_no_fabricated_definition(self):
