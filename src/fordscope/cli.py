@@ -206,6 +206,10 @@ def _build_parser() -> argparse.ArgumentParser:
     sub.add_parser("features", help="list built-in As-Built features (EXAMPLE/UNVERIFIED)")
     rf = sub.add_parser("read-feature", help="read a feature's current setting")
     rf.add_argument("key", help="feature key, e.g. fog_drl")
+    sf = sub.add_parser("set-feature", help="set a feature (simulator only; needs --confirm)")
+    sf.add_argument("key", help="feature key, e.g. fog_drl")
+    sf.add_argument("option", help="option name, e.g. on / off")
+    sf.add_argument("--confirm", action="store_true", help="actually write (default is a dry run)")
     return parser
 
 
@@ -261,6 +265,37 @@ def main(argv: Optional[List[str]] = None, *, port_factory=None) -> int:
                   f"(options: {sorted(feature.options)})")
             print("  ! EXAMPLE/UNVERIFIED mapping — demo only; confirm the real "
                   "block before trusting this.")
+        elif args.command == "set-feature":
+            feature = EXAMPLE_FEATURES.get(args.key)
+            if feature is None:
+                raise ValueError(f"unknown feature {args.key!r}; try 'features'")
+            if args.option not in feature.options:
+                raise ValueError(
+                    f"unknown option {args.option!r} for {args.key}; "
+                    f"choices: {sorted(feature.options)}"
+                )
+            # Gate 3: never write a built-in EXAMPLE (unverified) map to a real car.
+            if args.backend != "simulator":
+                print(
+                    "error: set-feature runs on the simulator only — the built-in feature "
+                    "maps are EXAMPLE/UNVERIFIED. For real coding use FORScan, or supply a "
+                    "verified feature definition.",
+                    file=sys.stderr,
+                )
+                return 2
+            coder = _feature_coder_for(bus, feature)
+            _def, current = coder.read_feature(args.key)
+            print(banner)
+            if not args.confirm:  # Gates 1+2: dry run unless --confirm
+                print(f"{feature.name} [{feature.module}]: {current} -> {args.option}  (DRY RUN)")
+                print("  Re-run with --confirm to write. Backup-before-write + read-back "
+                      "verify will apply.")
+            else:
+                coder.set_feature(args.key, args.option)  # backup -> write -> verify
+                _def2, now = coder.read_feature(args.key)
+                print(f"{feature.name} [{feature.module}]: {current} -> {now}  "
+                      f"(written, read-back verified)")
+                print("  Original block backed up before writing.")
     except Exception as exc:  # surface a clean message, non-zero exit
         print(f"error: {exc}", file=sys.stderr)
         return 3

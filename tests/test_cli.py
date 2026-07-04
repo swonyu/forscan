@@ -126,6 +126,37 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 3)
         self.assertIn("unknown feature", err)
 
+    def test_set_feature_dry_run_does_not_write(self):
+        code, out, _ = run("set-feature", "fog_drl", "on")  # no --confirm
+        self.assertEqual(code, 0)
+        self.assertIn("off -> on", out)
+        self.assertIn("DRY RUN", out)
+
+    def test_set_feature_confirm_writes_and_verifies(self):
+        code, out, _ = run("set-feature", "fog_drl", "on", "--confirm")
+        self.assertEqual(code, 0)
+        self.assertIn("off -> on", out)
+        self.assertIn("read-back verified", out)
+        self.assertIn("backed up", out)
+
+    def test_set_feature_refuses_on_live_backend(self):
+        code, _out, err = run(
+            "--backend", "elm327", "--port", "/dev/fake", "set-feature", "fog_drl", "on", "--confirm",
+            port_factory=fake_port_factory,
+        )
+        self.assertEqual(code, 2)
+        self.assertIn("simulator only", err)
+
+    def test_set_feature_unknown_option_errors(self):
+        code, _out, err = run("set-feature", "fog_drl", "maybe")
+        self.assertEqual(code, 3)
+        self.assertIn("unknown option", err)
+
+    def test_set_feature_unknown_feature_errors(self):
+        code, _out, err = run("set-feature", "nope", "on")
+        self.assertEqual(code, 3)
+        self.assertIn("unknown feature", err)
+
 
 class OpenBackendTests(unittest.TestCase):
     def test_simulator_returns_demo_and_simulated_banner(self):

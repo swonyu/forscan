@@ -186,3 +186,10 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   As-Built blocks (+ an IPC module) so it runs end-to-end. +4 tests; verified by running.
   Next (iter 20): `set-feature` with backup-file + `--confirm` + simulator-only guard (won't
   write unverified maps to a live car). 227 total, `Ran 227 tests … OK`.
+- **Iter 20** — `set-feature <key> <option>` — the As-Built write side, three safety gates:
+  (1) dry-run by default (shows `current -> option`), (2) `--confirm` required to write, (3)
+  refuses on a live backend (won't write EXAMPLE/UNVERIFIED maps to a real car). On the simulator
+  the `--confirm` path runs the full `FeatureCoder.set_feature` (backup → write → read-back verify)
+  and reports `off -> on (written, read-back verified) · Original block backed up`. +5 tests
+  (dry-run, confirm-write, live-refusal, unknown feature/option); verified by running.
+  **Phase 2 As-Built is now drivable end-to-end from the CLI.** 232 total, `Ran 232 tests … OK`.
