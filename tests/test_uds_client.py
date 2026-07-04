@@ -18,6 +18,7 @@ from fordscope.uds import (
     UdsClient,
     SimulatedUdsEcu,
     NegativeResponseError,
+    UnexpectedResponseError,
     nrc_name,
 )
 from fordscope.uds import services as S
@@ -197,6 +198,15 @@ class ResponsePendingTimeoutTests(unittest.TestCase):
         self.assertEqual(resp, bytes([0x62, 0xF1, 0x90]))
         # First recv on P2 (1.0); every recv AFTER a 0x78 on P2* (5.0).
         self.assertEqual(sock.recv_timeouts, [1.0, 5.0])
+
+    def test_negative_response_wrong_sid_is_rejected(self):
+        # ISO 14229 §7.5: a negative response [0x7F, SID, NRC] must echo the request
+        # SID. A crossed-wire reply (SecurityAccess 0x27 error to a RDBI 0x22 request)
+        # must be rejected as unexpected, not misattributed to the caller's request.
+        sock = _RecordingSocket([bytes([0x7F, 0x27, 0x31])])
+        client = UdsClient(sock)
+        with self.assertRaises(UnexpectedResponseError):
+            client.request(bytes([0x22, 0xF1, 0x90]))  # we sent RDBI (0x22)
 
 
 if __name__ == "__main__":

@@ -57,6 +57,13 @@ class ObdClient:
         if resp[0] == NEGATIVE_RESPONSE_SID:
             if len(resp) < 3:
                 raise ObdError("malformed negative response")
+            if resp[1] != payload[0]:
+                # The negative response must echo the request mode; a mismatch is a
+                # crossed-wire reply — reject it, don't misattribute it to this request.
+                raise ObdError(
+                    f"negative response mode 0x{resp[1]:02X} does not echo "
+                    f"request mode 0x{payload[0]:02X}"
+                )
             raise ObdNegativeResponse(resp[1], resp[2])
         expected = (payload[0] + 0x40) & 0xFF
         if resp[0] != expected:

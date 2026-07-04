@@ -306,6 +306,22 @@ class ObdClientTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             client.read_dtcs(mode=0x01)
 
+    def test_negative_response_wrong_mode_is_rejected(self):
+        # A negative response must echo the request mode; a crossed-wire mode
+        # (mode 03 error to a mode 01 request) is rejected as malformed, NOT
+        # misattributed to the caller's request as an ObdNegativeResponse.
+        class _Scripted:
+            def send(self, payload):
+                pass
+
+            def recv(self, timeout=1.0):
+                return bytes([0x7F, 0x03, 0x31])  # neg for mode 03, we sent mode 01
+
+        client = ObdClient(_Scripted())
+        with self.assertRaises(ObdError) as ctx:
+            client.current_data(0x0C)  # mode 01
+        self.assertNotIsInstance(ctx.exception, ObdNegativeResponse)
+
 
 if __name__ == "__main__":
     unittest.main()

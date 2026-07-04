@@ -99,6 +99,14 @@ class UdsClient:
                 if len(resp) < 3:
                     raise UnexpectedResponseError("malformed negative response")
                 echoed_sid, nrc = resp[1], resp[2]
+                if echoed_sid != sid:
+                    # ISO 14229 §7.5: the negative-response SID must echo the request
+                    # SID. A mismatch is a crossed-wire/non-conformant reply — reject
+                    # it, don't misattribute it to this caller's request.
+                    raise UnexpectedResponseError(
+                        f"negative response SID 0x{echoed_sid:02X} does not echo "
+                        f"request SID 0x{sid:02X}"
+                    )
                 if nrc == NRC_RESPONSE_PENDING:
                     pending += 1
                     if pending > self.max_response_pending:
