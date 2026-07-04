@@ -25,6 +25,7 @@ MODE_PENDING_DTCS = 0x07
 MODE_VEHICLE_INFO = 0x09
 MODE_PERMANENT_DTCS = 0x0A
 NEGATIVE_RESPONSE_SID = 0x7F
+NRC_RESPONSE_PENDING = 0x78  # requestCorrectlyReceived-ResponsePending (keep waiting)
 VEHICLE_INFO_VIN = 0x02
 VEHICLE_INFO_CALID = 0x04       # calibration ID(s), ASCII, 16-byte items
 VEHICLE_INFO_CVN = 0x06         # calibration verification number(s), 4-byte
@@ -43,34 +44,56 @@ class ObdNegativeResponse(ObdError):
 
 
 class ObdClient:
-    def __init__(self, socket: IsoTpSocket, *, timeout: float = 1.0) -> None:
+    def __init__(
+        self,
+        socket: IsoTpSocket,
+        *,
+        timeout: float = 1.0,
+        response_pending_timeout: float = 5.0,
+        max_response_pending: int = 5,
+    ) -> None:
         self.socket = socket
         self.timeout = timeout
+        # A slow ECU (common on Mode 09 VIN/CALID, or DTC reads on slow modules) may
+        # reply NRC 0x78 = "still working, keep waiting"; grant a longer window then.
+        self.response_pending_timeout = response_pending_timeout
+        self.max_response_pending = max_response_pending
 
     def _request(self, payload: bytes) -> bytes:
         self.socket.send(payload)
-        resp = self.socket.recv(self.timeout)
-        if resp is None:
-            raise ObdError(f"no response to mode 0x{payload[0]:02X}")
-        if len(resp) == 0:
-            raise ObdError("empty OBD response")
-        if resp[0] == NEGATIVE_RESPONSE_SID:
-            if len(resp) < 3:
-                raise ObdError("malformed negative response")
-            if resp[1] != payload[0]:
-                # The negative response must echo the request mode; a mismatch is a
-                # crossed-wire reply — reject it, don't misattribute it to this request.
-                raise ObdError(
-                    f"negative response mode 0x{resp[1]:02X} does not echo "
-                    f"request mode 0x{payload[0]:02X}"
-                )
-            raise ObdNegativeResponse(resp[1], resp[2])
-        expected = (payload[0] + 0x40) & 0xFF
-        if resp[0] != expected:
-            raise ObdError(
-                f"expected 0x{expected:02X}, got 0x{resp[0]:02X}"
-            )
-        return resp
+        pending = 0
+        timeout = self.timeout
+        while True:
+            resp = self.socket.recv(timeout)
+            if resp is None:
+                raise ObdError(f"no response to mode 0x{payload[0]:02X}")
+            if len(resp) == 0:
+                raise ObdError("empty OBD response")
+            if resp[0] == NEGATIVE_RESPONSE_SID:
+                if len(resp) < 3:
+                    raise ObdError("malformed negative response")
+                if resp[1] != payload[0]:
+                    # The negative response must echo the request mode; a mismatch is a
+                    # crossed-wire reply — reject it, don't misattribute it to this request.
+                    raise ObdError(
+                        f"negative response mode 0x{resp[1]:02X} does not echo "
+                        f"request mode 0x{payload[0]:02X}"
+                    )
+                if resp[2] == NRC_RESPONSE_PENDING:
+                    # 0x78 is NOT terminal — the ECU is still working. Keep polling
+                    # (with the longer window), exactly as the UDS client does.
+                    pending += 1
+                    if pending > self.max_response_pending:
+                        raise ObdError(
+                            f"mode 0x{payload[0]:02X}: too many responsePending (0x78)"
+                        )
+                    timeout = self.response_pending_timeout
+                    continue
+                raise ObdNegativeResponse(resp[1], resp[2])
+            expected = (payload[0] + 0x40) & 0xFF
+            if resp[0] != expected:
+                raise ObdError(f"expected 0x{expected:02X}, got 0x{resp[0]:02X}")
+            return resp
 
     def current_data(self, pid: int) -> PidResult:
         """Mode 01: read one live-data PID, decoded to value + unit."""

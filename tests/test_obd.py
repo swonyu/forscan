@@ -339,6 +339,34 @@ class ObdClientTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             client.read_dtcs(mode=0x01)
 
+    def test_response_pending_loops_then_returns(self):
+        # NRC 0x78 (responsePending) is "keep waiting", NOT terminal — the client must
+        # loop and return the eventual positive response (common on Mode 09 reads).
+        class _Scripted:
+            def __init__(self):
+                self._r = [bytes([0x7F, 0x09, 0x78]),
+                           bytes([0x49, 0x02, 0x01]) + b"1FMHK8D89ABA12345"]
+
+            def send(self, payload):
+                pass
+
+            def recv(self, timeout=1.0):
+                return self._r.pop(0) if self._r else None
+
+        self.assertEqual(ObdClient(_Scripted()).read_vin(), "1FMHK8D89ABA12345")
+
+    def test_response_pending_gives_up_after_max(self):
+        class _AlwaysPending:
+            def send(self, payload):
+                pass
+
+            def recv(self, timeout=1.0):
+                return bytes([0x7F, 0x01, 0x78])
+
+        client = ObdClient(_AlwaysPending(), max_response_pending=3)
+        with self.assertRaises(ObdError):
+            client.current_data(0x0C)
+
     def test_negative_response_wrong_mode_is_rejected(self):
         # A negative response must echo the request mode; a crossed-wire mode
         # (mode 03 error to a mode 01 request) is rejected as malformed, NOT
