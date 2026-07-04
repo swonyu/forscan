@@ -115,6 +115,15 @@ class TesterPresentTests(unittest.TestCase):
         client, _ = make_uds()
         client.tester_present(suppress_response=False)  # no exception
 
+    def test_suppressed_tester_present_surfaces_negative_response(self):
+        # The suppress bit suppresses only the POSITIVE response; a conformant ECU
+        # still NRCs on error. A rejected keep-alive must raise, not be silently
+        # believed to be keeping the session alive.
+        sock = _RecordingSocket([bytes([0x7F, 0x3E, 0x7F])])  # serviceNotSupportedInActiveSession
+        client = UdsClient(sock)
+        with self.assertRaises(NegativeResponseError):
+            client.tester_present(suppress_response=True)
+
 
 class UnsupportedServiceTests(unittest.TestCase):
     def test_unsupported_service_raises(self):

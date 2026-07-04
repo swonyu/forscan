@@ -64,10 +64,14 @@ class UdsClient:
         *,
         p2_timeout: float = 1.0,
         p2_star_timeout: float = 5.0,
+        tester_present_probe_timeout: float = 0.05,
         max_response_pending: int = 5,
     ) -> None:
         self.socket = socket
         self.p2_timeout = p2_timeout
+        # How long a suppressed TesterPresent briefly waits to catch an NRC the ECU
+        # may still send (positive is suppressed). Short — a slower NRC is missed.
+        self.tester_present_probe_timeout = tester_present_probe_timeout
         # ISO 14229 P2*server_max: the longer window the ECU may use AFTER it has
         # sent responsePending (0x78). Default 5 s per the standard's typical value.
         self.p2_star_timeout = p2_star_timeout
@@ -155,8 +159,25 @@ class UdsClient:
         return resp
 
     def tester_present(self, suppress_response: bool = True) -> None:
+        """Mode 0x3E session keep-alive. With ``suppress_response`` the ECU suppresses
+        the POSITIVE reply (fire-and-forget), but ISO 14229 still requires it to send a
+        NEGATIVE response on error — so we briefly probe for one and raise it rather than
+        silently believe a rejected heartbeat kept the session alive. A NRC slower than
+        ``tester_present_probe_timeout`` is missed; use suppress_response=False for
+        guaranteed detection."""
         sub = SUPPRESS_POSITIVE_RESPONSE_BIT if suppress_response else 0x00
-        self.request(bytes([TESTER_PRESENT, sub]), expect_response=not suppress_response)
+        if not suppress_response:
+            self.request(bytes([TESTER_PRESENT, sub]))
+            return
+        self.socket.send(bytes([TESTER_PRESENT, sub]))
+        resp = self.socket.recv(self.tester_present_probe_timeout)
+        if resp is not None and len(resp) >= 3 and resp[0] == NEGATIVE_RESPONSE_SID:
+            if resp[1] != TESTER_PRESENT:
+                raise UnexpectedResponseError(
+                    f"negative response SID 0x{resp[1]:02X} does not echo request "
+                    f"SID 0x{TESTER_PRESENT:02X}"
+                )
+            raise NegativeResponseError(resp[1], resp[2])
 
     # --- bidirectional controls -----------------------------------------
     # SAFETY: these command real actuators (relays, valves, motors, self-tests)
