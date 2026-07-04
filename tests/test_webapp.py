@@ -369,6 +369,17 @@ class ServerTests(unittest.TestCase):
         from fordscope.webapp.server import INDEX_HTML
         self.assertIn("\\n", INDEX_HTML)
 
+    def test_live_poll_handles_lost_connection(self):
+        # Regression guard (behavior browser-verified in iter 117): the 1 Hz live poll
+        # runs on setInterval, so a NETWORK-level fetch rejection (server restart, a
+        # slow-serial timeout) must be caught -- otherwise it spams unhandled rejections
+        # every second with a frozen dashboard. The catch must show a message AND stop
+        # the timer. Python can't run the JS, so pin the guard's presence structurally.
+        from fordscope.webapp.server import INDEX_HTML
+        self.assertIn("lost connection to FordScope", INDEX_HTML)
+        # the live fetch must be wrapped so a rejection routes to stopLive(), not the void
+        self.assertRegex(INDEX_HTML, r"try\{const r=await fetch\('/api/live")
+
     def test_index_page_exposes_new_feature_buttons(self):
         # The newer endpoints (calibration/Mode06/dtc-states/drive-cycle) must be
         # directly reachable from the Mac-app UI, not only via the health report.

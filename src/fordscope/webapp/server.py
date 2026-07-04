@@ -146,8 +146,10 @@ function sparkline(vals){const w=120,h=24,n=vals.length;if(n<2)return '';
  const pts=vals.map((v,i)=>{const x=(i/(n-1))*w;const y=typeof v==='number'?h-((v-lo)/span)*h:h;return x.toFixed(1)+','+y.toFixed(1);}).join(' ');
  return '<svg class="spark" width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none"><polyline fill="none" stroke="#c0392b" stroke-width="1.5" points="'+pts+'"/></svg>';}
 async function pollLive(){const pids=document.getElementById('livepids').value;
- const r=await fetch('/api/live?pids='+encodeURIComponent(pids));const j=await r.json();
  const t=document.getElementById('live');
+ let j;
+ try{const r=await fetch('/api/live?pids='+encodeURIComponent(pids));j=await r.json();}
+ catch(e){t.innerHTML='<tr><td>live polling stopped — lost connection to FordScope</td></tr>';stopLive();return;}
  if(j.error){t.innerHTML='<tr><td>'+j.error+'</td></tr>';stopLive();return;}
  if(j.banner)setBanner(j.banner);
  (j.rows||[]).forEach(x=>{const k=x.pid;if(!(k in liveHistory))liveHistory[k]=[];const hh=liveHistory[k];hh.push(typeof x.value==='number'?x.value:null);if(hh.length>40)hh.shift();});

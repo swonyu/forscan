@@ -904,6 +904,18 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   ObdError: break`) deliberately unchanged — a corrupt frame there is a genuine truncate-vs-propagate
   judgment call, and the outer layer handles the leak; changing it blindly could silently truncate the
   PID list. +1 test → **438 green**.
+- **Iter 117** (JS robustness — live poll survives a lost connection; browser-VERIFIED) — Applied the
+  "verify the integrated artifact" lesson to the one path only checked on the happy side: the GUI's JS
+  error handling. Server-error responses were handled everywhere (`j.error` checks), but `pollLive()`
+  runs on a 1 Hz `setInterval` with NO try/catch around its `fetch`/`json`, so a NETWORK-level rejection
+  (server restart, a slow-serial timeout) spammed unhandled rejections every second with a frozen
+  dashboard. Wrapped the live fetch in try/catch → shows "live polling stopped — lost connection to
+  FordScope" and calls `stopLive()`. **Verified BY RUNNING** (not claimed — JS bugs are invisible to
+  Python tests, the dashboard-JS lesson): `node --check` on the extracted JS (parses), then Claude
+  Preview — connected demo (happy path live still renders RPM+sparkline), then overrode `fetch` to
+  reject and confirmed the table shows the message AND `liveTimer===null` (polling stopped), console
+  clean. Added a structural regression guard (`test_live_poll_handles_lost_connection`). +1 test →
+  **439 green**. (Transient preview launch.json created in the cwd for the run, removed after.)
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the
