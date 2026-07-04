@@ -113,10 +113,20 @@ class AsBuiltCoder:
     def has_backup(self, did: int) -> bool:
         return self.store.has(self._key(did))
 
-    def backup_block(self, did: int) -> bytes:
-        """Read the current block and persist it. Returns the backed-up bytes."""
+    def backup_block(self, did: int, *, force: bool = False) -> bytes:
+        """Persist the current block as the restore-to-original baseline and return it.
+
+        The FIRST captured value is IMMUTABLE: if a backup already exists this returns
+        it unchanged rather than re-reading the (possibly already-modified) block and
+        clobbering the factory original — otherwise coding a shared block a second time
+        would destroy the only recovery data (restore would return a modified state,
+        not factory). Pass ``force=True`` only to deliberately re-baseline.
+        """
+        key = self._key(did)
+        if not force and self.store.has(key):
+            return self.store.load(key)
         data = self.read_block(did)
-        self.store.save(self._key(did), data)
+        self.store.save(key, data)
         return data
 
     def _prepare_session(self) -> None:

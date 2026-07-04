@@ -90,6 +90,17 @@ class BackupAndRestoreTests(unittest.TestCase):
         coder.restore_block(BLOCK_DID)
         self.assertEqual(ecu.dids[BLOCK_DID], ORIGINAL)
 
+    def test_second_code_block_preserves_the_first_captured_original(self):
+        # The factory-original backup is IMMUTABLE. Coding a block a SECOND time
+        # must not re-capture the already-modified value and clobber the original —
+        # else restore returns a modified state, not factory. (Normal Ford case:
+        # one block holds several feature nibbles, so a block is coded >1 time.)
+        coder, ecu = make_coder()
+        coder.code_block(BLOCK_DID, NEW)                        # backup=ORIGINAL, block=NEW
+        coder.code_block(BLOCK_DID, bytes([0xDE, 0xAD, 0xBE]))  # must NOT clobber backup
+        coder.restore_block(BLOCK_DID)
+        self.assertEqual(ecu.dids[BLOCK_DID], ORIGINAL)        # factory, not NEW/DEADBE
+
     def test_restore_without_backup_raises(self):
         coder, _ = make_coder()
         with self.assertRaises(NoBackupError):
