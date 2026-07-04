@@ -72,6 +72,7 @@ def build_demo_vehicle() -> Tuple[SimulatorTransport, List[AddressPair]]:
                 # calibration readout is demonstrable end-to-end on the simulator
                 calibration_ids=["DEMO-PCM-CAL-01"],
                 cvns=[bytes([0x1A, 0x2B, 0x3C, 0x4D])],
+                ecu_names=["DEMO-ECM-EngineCtl"],
                 # Mode 06: catalyst + O2 pass; EGR deliberately out-of-limits (fails)
                 # so the pass/fail path is demonstrable end-to-end. (tid,uasid,val,min,max)
                 monitor_tests={

@@ -280,7 +280,11 @@ class FordScopeController:
             except (ObdError, KeyError, ValueError):
                 return []
 
-        return {"calids": _safe(obd.read_calibration_ids), "cvns": _safe(obd.read_cvns)}
+        return {
+            "calids": _safe(obd.read_calibration_ids),
+            "cvns": _safe(obd.read_cvns),
+            "ecu_names": _safe(obd.read_ecu_names),
+        }
 
     @_synchronized
     def supported_pids(self) -> list:

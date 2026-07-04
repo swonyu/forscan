@@ -115,6 +115,7 @@ class ControllerTests(unittest.TestCase):
         cal = c.calibration()
         self.assertIn("DEMO-PCM-CAL-01", cal["calids"])
         self.assertEqual(cal["cvns"], ["1A2B3C4D"])
+        self.assertIn("DEMO-ECM-EngineCtl", cal["ecu_names"])  # Mode 09 InfoType 0x0A, now surfaced
 
     def test_health_report_includes_calibration(self):
         c = FordScopeController()

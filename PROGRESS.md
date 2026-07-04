@@ -672,6 +672,12 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   tested — are now confirmed to actually render (e.g. "Calibration IDs: DEMO-PCM-CAL-01 / CVN
   1A2B3C4D"; "• Oxygen sensor (generic): …"; "CONFIRMED — …MIL is on"). The browser dashboard is now
   end-to-end verified in full, not by claim. No code change; 416 green.
+- **Iter 95** — Wired a genuine LOOSE END: `read_ecu_names` (Mode 09 InfoType 0x0A, ECU name/acronym)
+  was built + tested in iter 49 but never surfaced (grep confirmed zero callers in src/). Added it to
+  `controller.calibration()` (now `{calids, cvns, ecu_names}`), the demo seed, and the UI
+  `showCalibration()` render — completing the Mode-09 vehicle-info readout. Verified BY RUNNING: suite
+  green + `node --check` (JS still parses) + browser render confirmed ("ECU names: DEMO-ECM-EngineCtl").
+  +1 assertion. 416 green. (Completion of a built-but-unwired method, not a manufactured feature.)
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the

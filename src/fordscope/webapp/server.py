@@ -107,7 +107,8 @@ async function showCalibration(){const r=await fetch('/api/calibration');const j
  if(j.banner)setBanner(j.banner);
  if(j.error){document.getElementById('out').textContent=j.error;return;}
  let s='Calibration IDs: '+((j.calids&&j.calids.length)?j.calids.join(', '):'(none reported)')+'\n';
- s+='CVN: '+((j.cvns&&j.cvns.length)?j.cvns.join(', '):'(none reported)');
+ s+='CVN: '+((j.cvns&&j.cvns.length)?j.cvns.join(', '):'(none reported)')+'\n';
+ s+='ECU names: '+((j.ecu_names&&j.ecu_names.length)?j.ecu_names.join(', '):'(none reported)');
  document.getElementById('out').textContent=s;}
 async function showDtcStates(){const r=await fetch('/api/dtc-states');const j=await r.json();
  if(j.banner)setBanner(j.banner);
