@@ -39,7 +39,9 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
 ## Phase 2 — As-Built coding (Tier 4)
 - [x] 4.1 Backup-before-write engine (`ford/asbuilt.py`): `AsBuiltCoder` refuses writes without a
       captured backup; `InMemoryBackupStore` + durable `FileBackupStore`; one-click `restore_block`
-- [ ] 4.2 As-Built read + decode (block/sub-block byte layout, Ford As-Built format)
+- [x] 4.2 As-Built read + decode (`ford/asbuilt_format.py`): `AsBuiltBlock` (label/data/checksum),
+      parse, sum-to-zero checksum compute+validate, byte/nibble edit w/ re-checksum; coder bridge
+      (`read_as_built`/`code_as_built`). Checksum convention documented + confirm-on-vehicle.
 - [x] 4.3 Guarded write with read-back verify + rollback (in 4.1: `write_block` verifies,
       `restore_block` rolls back; `VerificationError` on mismatch)
 
@@ -130,3 +132,9 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   (survives sessions). Enters extended session before writes; SecurityAccess still NEEDS ON-CAR
   CHECK. +10 tests incl. adversarial: refusal-makes-no-change + a CorruptingUdsEcu proving
   read-back verify fires (151 total, `Ran 151 tests … OK`). Next: 4.2 As-Built block decode.
+- **Iter 13** — As-Built block format (`ford/asbuilt_format.py`): `AsBuiltBlock`
+  (label/data/checksum), `parse_block`, `compute_checksum` (sum-to-zero mod 256, documented +
+  confirm-on-vehicle), safe `set_byte`/`set_nibble`/`with_data` that re-checksum, `to_bytes`,
+  `format`. Coder bridge `read_as_built`/`code_as_built` (parse → edit → safe write → restore).
+  +14 tests incl. checksum validity, nibble edits, round-trip, and a full read→edit→code→restore
+  through the coder (165 total, `Ran 165 tests … OK`). Next: 4.4 named feature definitions.

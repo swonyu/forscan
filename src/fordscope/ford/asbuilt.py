@@ -20,6 +20,7 @@ import os
 from typing import Dict, List, Optional
 
 from ..uds.services import SESSION_EXTENDED
+from .asbuilt_format import AsBuiltBlock, parse_block
 
 
 class AsBuiltError(Exception):
@@ -151,3 +152,12 @@ class AsBuiltCoder:
         readback = self.read_block(did)
         if readback != backup:
             raise VerificationError(f"restore verify failed on DID 0x{did:04X}")
+
+    # --- structured As-Built ------------------------------------------
+    def read_as_built(self, did: int, label: str) -> AsBuiltBlock:
+        """Read a DID and parse it as a Ford As-Built block (data + checksum)."""
+        return parse_block(label, self.read_block(did))
+
+    def code_as_built(self, did: int, block: AsBuiltBlock) -> bytes:
+        """Safely write an edited As-Built block (backup -> write -> verify)."""
+        return self.code_block(did, block.to_bytes())

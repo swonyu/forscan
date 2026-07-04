@@ -21,6 +21,7 @@ from .asbuilt import (
     VerificationError,
     NoBackupError,
 )
+from .asbuilt_format import AsBuiltBlock, parse_block, compute_checksum
 
 __all__ = [
     "AddressPair",
@@ -40,4 +41,7 @@ __all__ = [
     "BackupRequiredError",
     "VerificationError",
     "NoBackupError",
+    "AsBuiltBlock",
+    "parse_block",
+    "compute_checksum",
 ]
