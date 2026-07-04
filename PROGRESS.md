@@ -563,3 +563,15 @@ feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and 
   complete and returns only LOW/none, the safety cycle is converged; if it still throws HIGHs, STOP
   general simulator-audits (diminishing returns; the HIGHs cluster in backup/SecurityAccess, some are
   gaps in my own fixes) and pivot — the real remaining risk-reduction is the on-car run (R8), not round 8.**
+- **Iters 78–80** — 7th audit was **COMPLETE** and — importantly — the **safety-critical dims came
+  back CLEAN** (safety-gates: "backup-before-write enforced, no bypass, 74/74 pass"; never-build:
+  "SecurityAccess caller-supplied, reflash unreachable, no readiness-mask"). My iters 59/72/73/75/76
+  closed those. The 3 findings were now OUTSIDE the core: (78, HIGH) `ObdClient._request` never handled
+  NRC 0x78 responsePending — a busy ECU (Mode 09 VIN/CALID) got its read aborted; ported the UDS 0x78
+  loop. (79, MED) webapp `run()` leaked the listening socket on Ctrl-C (`shutdown` without
+  `server_close`); fixed + testable via a mocked server. (80, LOW) `parse_isotp` FF path lacked SF's
+  truncation guard; added. +5 tests. 393 green. **CONVERGENCE CALL: safety-critical subsystems are
+  verified clean; the tail is now spec/robustness edges. Running ONE confirmation audit (the OBD
+  `_request` change is high-blast-radius) then STOPPING general audits regardless of any LOW tail —
+  the owed work is the R3/R5 research re-run (blocked features) and R4, which the audit rabbit-hole has
+  crowded out since iter 52. 26 real bugs fixed across 7 runs.**
