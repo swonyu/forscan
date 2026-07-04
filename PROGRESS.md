@@ -644,6 +644,17 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   session stats). Now accurate + a Mac-app quick-start + the `ports` command + the packaging pointer.
   Every claim VERIFIED against the code (PID count, endpoints, subcommands, test count), not memory.
   412 green. **The tool is complete; the loop is now in maintenance mode — no features to manufacture.**
+- **Iter 92** — Expose the newer features in the browser UI (Calibration / DTC states / Monitor
+  tests / Drive cycle buttons + render fns) — AND caught a **latent COMPLETE dashboard-JS failure**
+  while verifying the new JS with `node --check`: `INDEX_HTML` was a NON-raw Python string, so every
+  JS `\n` became a REAL newline inside JS string literals → a hard SyntaxError that broke the ENTIRE
+  dashboard in any browser. **All page-is-served tests passed for dozens of iterations because none
+  execute the JS** — so the browser UI (connect/scan/live/sparkline/everything) never actually ran.
+  Fixed by making `INDEX_HTML` raw; verified the served `<script>` now parses via `node --check`.
+  **Honesty correction:** earlier "R4 graphing verified / UI shipped" claims were about the DATA/API
+  layers (which were always tested-green) — the *integrated browser rendering* was broken until now.
+  Lesson recorded: verify the integrated artifact (parse/launch the actual page), not just the pieces.
+  +2 tests incl. a raw-string regression guard. 416 green.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the
