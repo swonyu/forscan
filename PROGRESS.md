@@ -495,3 +495,14 @@ feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and 
   (0x3-0xF) as WAIT and looped to a misleading timeout; ISO 15765-2 requires N_INVALID_FS abort.
   Now only WAIT (0x1) loops; reserved raises `IsoTpError`. +1 test. 374 green. **All 4 second-audit
   findings closed (9 real bugs total across 2 audits); re-running a third time to converge.**
+- **Iter 63** (docs) — Applied the owner's cross-project standing directives to FordScope's
+  `CLAUDE.md` (distilled from the Salehman `opus-operating` skill + `owner-decision-style` /
+  `fordscope-work-expectations` / `workflow-model-config` memories). New "Standing owner directives"
+  section: **no `AskUserQuestion` tool** (pick the best option + proceed; one-line prose if a steer
+  is truly needed); conservative/reversible defaults, BLOCK only for irreversible/safety-critical;
+  proof discipline (done = pasted output + positive path fired; the diff is the fact; spec/standalone
+  hand-derived fixtures that genuinely straddle; logs describe the final tree; nil = unknown never
+  fabricated); ultracode bar (exhaustive + adversarial + verify-by-measurement; Workflows with Opus
+  orchestrator + Sonnet-max subagents, serialized; token discipline; research-memory). Also wrote
+  two durable memory files (fordscope-project-map, workspace-and-skills-map) + workflow-model-config.
+  Docs only; no code change; 374 green.
