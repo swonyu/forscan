@@ -69,6 +69,9 @@ class FileBackupStore:
             self._data = {k: bytes.fromhex(v) for k, v in raw.items()}
 
     def _flush(self) -> None:
+        parent = os.path.dirname(self.path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
         with open(self.path, "w") as fh:
             json.dump({k: v.hex() for k, v in self._data.items()}, fh, indent=2)
 

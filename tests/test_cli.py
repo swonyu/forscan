@@ -1,6 +1,8 @@
 """CLI tests — drive main() with argv, capture output, assert behavior + exit codes."""
 import contextlib
 import io
+import os
+import tempfile
 import unittest
 
 from fordscope.cli import main, DEMO_VIN, open_backend, default_modules, modules_for_profile
@@ -156,6 +158,31 @@ class CliTests(unittest.TestCase):
         code, _out, err = run("set-feature", "nope", "on")
         self.assertEqual(code, 3)
         self.assertIn("unknown feature", err)
+
+    def test_set_then_restore_feature_round_trip(self):
+        with tempfile.TemporaryDirectory() as d:
+            bf = os.path.join(d, "backups.json")
+            code1, out1, _ = run("--backup-file", bf, "set-feature", "fog_drl", "on", "--confirm")
+            self.assertEqual(code1, 0)
+            self.assertIn("saved to", out1)
+            self.assertTrue(os.path.exists(bf))
+            # Second invocation restores from the persisted backup.
+            code2, out2, _ = run("--backup-file", bf, "restore-feature", "fog_drl")
+            self.assertEqual(code2, 0)
+            self.assertIn("restored", out2)
+
+    def test_restore_without_backup_errors(self):
+        code, _out, err = run("restore-feature", "fog_drl")  # no backup file / none saved
+        self.assertEqual(code, 3)
+        self.assertIn("no backup", err.lower())
+
+    def test_restore_feature_refuses_on_live_backend(self):
+        code, _out, err = run(
+            "--backend", "elm327", "--port", "/dev/fake", "restore-feature", "fog_drl",
+            port_factory=fake_port_factory,
+        )
+        self.assertEqual(code, 2)
+        self.assertIn("simulator only", err)
 
 
 class OpenBackendTests(unittest.TestCase):

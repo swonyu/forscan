@@ -193,3 +193,10 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   and reports `off -> on (written, read-back verified) · Original block backed up`. +5 tests
   (dry-run, confirm-write, live-refusal, unknown feature/option); verified by running.
   **Phase 2 As-Built is now drivable end-to-end from the CLI.** 232 total, `Ran 232 tests … OK`.
+- **Iter 21** — `restore-feature <key>` (one-click undo) + `--backup-file` for durable backups.
+  `FeatureCoder.restore_feature`; CLI `_store_for` (FileBackupStore when `--backup-file` given, else
+  in-session). `set-feature --backup-file X` persists the original block; `restore-feature
+  --backup-file X` writes it back + verifies (simulator-only, like set). `FileBackupStore._flush`
+  now creates parent dirs. +3 tests incl. a full durable set→restore across two invocations;
+  verified by running. **As-Built safety loop (backup→write→verify→restore) complete in the CLI.**
+  235 total, `Ran 235 tests … OK`.

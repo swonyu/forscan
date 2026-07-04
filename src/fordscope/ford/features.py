@@ -88,6 +88,11 @@ class FeatureCoder:
         new_block = d.apply(block, option_name)
         return self.coder.code_as_built(d.did, new_block)
 
+    def restore_feature(self, key: str) -> None:
+        """Undo: write the feature block's saved backup back and verify."""
+        d = self._definition(key)
+        self.coder.restore_block(d.did)
+
 
 # --- EXAMPLE feature map — UNVERIFIED, confirm on-vehicle before use ------
 _UNVERIFIED = "EXAMPLE mapping — UNVERIFIED. Byte/nibble locations vary by model/year; confirm on your vehicle."

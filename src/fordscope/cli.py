@@ -24,6 +24,7 @@ from .ford import (
     fusion_2016,
     AsBuiltCoder,
     InMemoryBackupStore,
+    FileBackupStore,
     FeatureCoder,
     EXAMPLE_FEATURES,
 )
@@ -167,6 +168,11 @@ def _feature_coder_for(bus, feature, *, store=None) -> FeatureCoder:
     return FeatureCoder(coder, {feature.key: feature})
 
 
+def _store_for(backup_file):
+    """Durable FileBackupStore when --backup-file is given, else in-session memory."""
+    return FileBackupStore(backup_file) if backup_file else InMemoryBackupStore()
+
+
 def print_features() -> None:
     print("As-Built features (EXAMPLE / UNVERIFIED — demonstration mappings):")
     for key, f in EXAMPLE_FEATURES.items():
@@ -196,6 +202,11 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=["generic", "fusion2016"],
         help="module profile for scan/dtc (fusion2016 = verified 2016 Fusion S map)",
     )
+    parser.add_argument(
+        "--backup-file",
+        default=None,
+        help="persist As-Built backups to this JSON file (enables restore-feature later)",
+    )
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("scan", help="whole-car module identification scan")
     sub.add_parser("dtc", help="whole-car diagnostic trouble-code report")
@@ -210,6 +221,8 @@ def _build_parser() -> argparse.ArgumentParser:
     sf.add_argument("key", help="feature key, e.g. fog_drl")
     sf.add_argument("option", help="option name, e.g. on / off")
     sf.add_argument("--confirm", action="store_true", help="actually write (default is a dry run)")
+    rs = sub.add_parser("restore-feature", help="undo a set-feature from its saved backup (simulator only)")
+    rs.add_argument("key", help="feature key, e.g. fog_drl")
     return parser
 
 
@@ -283,7 +296,7 @@ def main(argv: Optional[List[str]] = None, *, port_factory=None) -> int:
                     file=sys.stderr,
                 )
                 return 2
-            coder = _feature_coder_for(bus, feature)
+            coder = _feature_coder_for(bus, feature, store=_store_for(args.backup_file))
             _def, current = coder.read_feature(args.key)
             print(banner)
             if not args.confirm:  # Gates 1+2: dry run unless --confirm
@@ -295,7 +308,24 @@ def main(argv: Optional[List[str]] = None, *, port_factory=None) -> int:
                 _def2, now = coder.read_feature(args.key)
                 print(f"{feature.name} [{feature.module}]: {current} -> {now}  "
                       f"(written, read-back verified)")
-                print("  Original block backed up before writing.")
+                backed = "saved to %s" % args.backup_file if args.backup_file else "captured in-session"
+                print(f"  Original block backed up ({backed}).")
+        elif args.command == "restore-feature":
+            feature = EXAMPLE_FEATURES.get(args.key)
+            if feature is None:
+                raise ValueError(f"unknown feature {args.key!r}; try 'features'")
+            if args.backend != "simulator":
+                print(
+                    "error: restore-feature runs on the simulator only (built-in maps are "
+                    "EXAMPLE/UNVERIFIED).",
+                    file=sys.stderr,
+                )
+                return 2
+            coder = _feature_coder_for(bus, feature, store=_store_for(args.backup_file))
+            coder.restore_feature(args.key)  # NoBackupError if none saved
+            _def, now = coder.read_feature(args.key)
+            print(banner)
+            print(f"{feature.name} [{feature.module}]: restored to '{now}' from backup.")
     except Exception as exc:  # surface a clean message, non-zero exit
         print(f"error: {exc}", file=sys.stderr)
         return 3
