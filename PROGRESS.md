@@ -541,3 +541,14 @@ feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and 
   votes (dimension survives), buckets under-quorum findings as `unverified`, and reports INCOMPLETE on
   any errored/dropped dimension or unverified finding. **17 real app bugs fixed across 4 runs; 5th run
   (honest script) to catch the 2 dims whose verifiers failed + check the fixpoint.**
+- **Iters 71–74** — 5th audit (Sonnet-max) **correctly reported `complete:false`** (honesty dim dropped
+  — the hardened script working) and found **4 more real bugs**, TWO of them gaps in my OWN recent
+  fixes: (71, HIGH) the iter-70 tester-present probe raised on `0x78` responsePending (busy≠rejected) →
+  would tear down a healthy session; now `0x78`→alive. (72, HIGH) `FileBackupStore._flush` truncated
+  then wrote (no atomic replace) → an interrupted write destroyed EVERY backup + corrupted the file
+  unreadable; now temp-file + `os.replace` atomic. (73, HIGH) backup key was scope+DID only and the CLI
+  hardcoded `scope="cli"` → two features on different modules sharing a DID collided → restore wrote the
+  WRONG module's bytes; now scoped `cli:<module>`. (74, MED) `request_download` returned a truncated
+  value when the ECU declared more length bytes than it sent; now validated. +4 tests, RED-first. 386
+  green. **21 real app bugs across 5 runs; 2 were gaps in my own fixes (the audit earns its keep); 6th
+  run to re-audit the dropped honesty dimension + check convergence.**
