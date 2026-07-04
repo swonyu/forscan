@@ -17,7 +17,8 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
 - [x] 1.1b ISO-TP transport layer: `IsoTpSocket` send/recv + flow control; `SimulatedIsoTpEcu`
       (reusable simulated endpoint). BS=0 both ways; client send honours ECU block-size>0.
       Follow-up: ECU-side receive block-size>0 + real STmin timing are [NEEDS ON-CAR CHECK].
-- [ ] 1.2 UDS client (ISO 14229): request/response, negative-response codes, session control
+- [x] 1.2 UDS client (ISO 14229): request/response, NRC handling, responsePending (0x78) loop,
+      session control, ECU reset, tester-present, Read/WriteDataByIdentifier + `SimulatedUdsEcu`
 - [ ] 1.3 OBD-II (SAE J1979) modes 01–0A on top of ISO-TP
 - [ ] 1.4 PID decode table (RPM, coolant, MAF, MAP, fuel trims, speed, …) with units
 - [ ] 1.5 DTC read/clear + DTC-definition database (generic + Ford)
@@ -62,3 +63,12 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   block-size-2 send, and an out-of-sequence rejection (53 total, `Ran 53 tests … OK`).
   One test-fixture bug self-caught: an 8-byte CF (impossible on classic CAN) — the codec's
   validation rejected it; fixed the fixture, not the assertion.
+- **Tooling** — `fordscope-build` reference skill + project `CLAUDE.md` (authored RED→GREEN via
+  writing-skills; honesty discipline found already-ambient so not re-encoded; protocol +
+  automotive boundaries shipped as reference; GREEN-verified). Docs only; suite unchanged.
+- **Iter 4** — UDS client (`uds/`). `services.py`: SIDs + NRC table + `nrc_name`. `client.py`:
+  `UdsClient.request` (positive / negative→`NegativeResponseError` / 0x78 responsePending loop
+  with bound) + wrappers (read/write DID, session control, ECU reset, tester-present w/ suppress).
+  `simulated_ecu.py`: `SimulatedUdsEcu` (DID store, sessions) as a `SimulatedIsoTpEcu` handler.
+  +17 tests incl. multi-frame VIN read, multi-frame write round-trip, NRC paths, and both
+  responsePending outcomes (70 total, `Ran 70 tests … OK`).
