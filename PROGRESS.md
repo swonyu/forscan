@@ -523,3 +523,21 @@ feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and 
   that digits 3-5 are hex, so `P4143`/`P0G43` masqueraded as well-formed. Now validated. +2 cases. 378
   green. **13 real bugs fixed across 3 audit runs; severity trending down (HIGH→MED→LOW); 4th run to
   check the fixpoint.**
+- **Iter 68** — 4th audit (Sonnet-max) found **4 more** (iters 59-67 held). Fixed the HIGH, a gap in
+  my own iter-55 VIN fix: `read_vin` decoded `errors="replace"`, so a same-length VIN with one corrupt
+  non-ASCII byte became 17 chars with a `�` silently substituted and passed the length guard; `_text_items`
+  (CALID/ECU) had the same gap. Both now decode STRICT — VIN raises + requires 17 alphanumerics; corrupt
+  CALID items are dropped, not fabricated. +2 tests. 380 green.
+- **Iter 69** — Audit (2 LOW): `freeze_frame` now checks the frame-number echo (resp[2]), not just the
+  PID; CLI help + README relabel the fusion2016 profile "confirmed-tier" (was flatly "verified" though
+  the data is 3-tier graded and the profile uses only the confirmed tier). +1 test. 380 green.
+- **Iter 70** — Audit (MED): suppressed `tester_present` set `expect_response=False` and never recv'd,
+  so a conformant ECU's NEGATIVE response (suppress bit suppresses only the POSITIVE) was invisible — a
+  rejected session keep-alive looked alive. Now briefly probes for an NRC (50ms default, documented
+  residual). +1 test. 382 green.
+- **Audit-script hardening** (the tool, not the app): the 4th run exposed a SECOND false-completeness
+  bug — a dying *verifier* (StructuredOutput cap) dropped its whole dimension while `complete` stayed
+  true (the first bug was auditor-nulls, fixed earlier). Script now catches verifier deaths as null
+  votes (dimension survives), buckets under-quorum findings as `unverified`, and reports INCOMPLETE on
+  any errored/dropped dimension or unverified finding. **17 real app bugs fixed across 4 runs; 5th run
+  (honest script) to catch the 2 dims whose verifiers failed + check the fixpoint.**
