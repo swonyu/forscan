@@ -13,7 +13,7 @@ from urllib.parse import urlparse, parse_qs
 
 from .controller import FordScopeController, list_ports, NotConnectedError
 
-INDEX_HTML = """<!doctype html>
+INDEX_HTML = r"""<!doctype html>
 <html><head><meta charset="utf-8"><title>FordScope</title>
 <style>
  body{background:#0b0d0e;color:#d6dbdd;font:14px/1.5 -apple-system,Menlo,monospace;margin:0;padding:24px}
@@ -50,6 +50,10 @@ INDEX_HTML = """<!doctype html>
   <button onclick="run('/api/vin')">VIN</button>
   <button onclick="showFreeze()">Freeze frame</button>
   <button onclick="showReadiness()">Readiness</button>
+  <button onclick="showDriveCycle()">Drive cycle</button>
+  <button onclick="showCalibration()">Calibration</button>
+  <button onclick="showDtcStates()">DTC states</button>
+  <button onclick="showMonitors()">Monitor tests</button>
   <button onclick="showReport()">Health report</button>
   <button onclick="window.location='/api/report.txt'">Download report</button>
   <button onclick="clearDtc()">Clear codes</button>
@@ -98,6 +102,35 @@ async function showFreeze(){const r=await fetch('/api/freeze');const j=await r.j
  if(j.error){document.getElementById('out').textContent=j.error;return;}
  let s='Freeze frame '+(j.dtc?'(triggered by '+j.dtc+')':'(no stored freeze frame)')+':\n';
  s+=(j.rows||[]).map(x=>'  '+x.name+': '+x.value+' '+x.unit).join('\n');
+ document.getElementById('out').textContent=s;}
+async function showCalibration(){const r=await fetch('/api/calibration');const j=await r.json();
+ if(j.banner)setBanner(j.banner);
+ if(j.error){document.getElementById('out').textContent=j.error;return;}
+ let s='Calibration IDs: '+((j.calids&&j.calids.length)?j.calids.join(', '):'(none reported)')+'\n';
+ s+='CVN: '+((j.cvns&&j.cvns.length)?j.cvns.join(', '):'(none reported)');
+ document.getElementById('out').textContent=s;}
+async function showDtcStates(){const r=await fetch('/api/dtc-states');const j=await r.json();
+ if(j.banner)setBanner(j.banner);
+ if(j.error){document.getElementById('out').textContent=j.error;return;}
+ let s='';['confirmed','pending','permanent'].forEach(k=>{const b=j[k];if(!b)return;
+  s+=k.toUpperCase()+(b.available===false?' (could not read)':'')+' — '+b.meaning+'\n';
+  s+=(b.codes&&b.codes.length?b.codes.map(c=>'  '+c.code+' '+(c.definition||'')).join('\n'):'  (none)')+'\n\n';});
+ document.getElementById('out').textContent=s.trim();}
+async function showMonitors(){const r=await fetch('/api/monitor-tests');const j=await r.json();
+ if(j.banner)setBanner(j.banner);
+ if(j.error){document.getElementById('out').textContent=j.error;return;}
+ const ms=j.monitors||[];
+ let s=ms.length?'Emission monitor self-tests (Mode 06):\n':'No Mode 06 monitor data.';
+ ms.forEach(m=>{const pass=m.tests.every(t=>t.passed);
+  s+='  '+m.category+': '+(pass?'PASS':'FAIL')+(m.standardized?'':' [OEM-specific MID]')+'\n';
+  m.tests.forEach(t=>{s+='    TID '+t.tid_hex+': '+t.value+'  ['+t.min+'..'+t.max+']  '+(t.passed?'ok':'OUT OF RANGE')+'\n';});});
+ document.getElementById('out').textContent=s;}
+async function showDriveCycle(){const r=await fetch('/api/drive-cycle');const j=await r.json();
+ if(j.banner)setBanner(j.banner);
+ if(j.error){document.getElementById('out').textContent=j.error;return;}
+ const tips=j.tips||[];
+ let s=tips.length?'Drive-cycle guidance for not-ready monitors:\n':'All monitors ready — no drive cycle needed.';
+ tips.forEach(t=>{s+='  • '+t.monitor+(t.ford_verified?' [Ford-verified]':' (generic)')+': '+t.guidance+'\n';});
  document.getElementById('out').textContent=s;}
 async function clearDtc(){
  if(!confirm('Clear stored trouble codes? This also resets emissions readiness monitors.'))return;

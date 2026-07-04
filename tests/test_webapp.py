@@ -300,6 +300,24 @@ class ServerTests(unittest.TestCase):
         self.assertIn("<polyline", html)
         self.assertIn("liveHistory", html)
 
+    def test_index_html_is_raw_so_js_escapes_survive(self):
+        # Regression: INDEX_HTML MUST be a raw string. A non-raw string turns every JS
+        # `\n` into a real newline inside string literals — a hard JS SyntaxError that
+        # breaks the ENTIRE dashboard, which page-is-served tests can't detect. If the
+        # literal 2-char `\n` escape is present, the raw-string invariant holds.
+        from fordscope.webapp.server import INDEX_HTML
+        self.assertIn("\\n", INDEX_HTML)
+
+    def test_index_page_exposes_new_feature_buttons(self):
+        # The newer endpoints (calibration/Mode06/dtc-states/drive-cycle) must be
+        # directly reachable from the Mac-app UI, not only via the health report.
+        _s, raw = self._req("GET", "/")
+        html = raw.decode()
+        for fn in ("showCalibration(", "showMonitors(", "showDtcStates(", "showDriveCycle("):
+            self.assertIn(fn, html)
+        for path in ("/api/calibration", "/api/monitor-tests", "/api/dtc-states", "/api/drive-cycle"):
+            self.assertIn(path, html)
+
     def test_ports_endpoint(self):
         _s, j = self._json("GET", "/api/ports")
         self.assertIn(DEMO_PORT, j["ports"])
