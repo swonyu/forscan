@@ -306,6 +306,19 @@ class ObdClientTests(unittest.TestCase):
         data = b"JR3A-14C204\xff-BF0"  # 16 bytes, one corrupt
         self.assertEqual(ObdClient._text_items(data, 16), [])
 
+    def test_freeze_frame_wrong_frame_echo_rejected(self):
+        # Mode 02 response is [0x42, pid, frame, ...] — a response echoing a DIFFERENT
+        # frame number than requested must be rejected, not returned as the record.
+        class _Scripted:
+            def send(self, payload):
+                pass
+
+            def recv(self, timeout=1.0):
+                return bytes([0x42, 0x0C, 0x00, 0x0F, 0xA0])  # echoes frame 0
+
+        with self.assertRaises(ObdError):
+            ObdClient(_Scripted()).freeze_frame(0x0C, frame=1)  # we asked for frame 1
+
     def test_read_cvns_as_hex(self):
         # Mode 09 InfoType 0x06 — 4-byte verification number, surfaced as hex.
         client, _ = make_obd(cvns=[bytes([0xA5, 0xB3, 0xC1, 0xD2])])

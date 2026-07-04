@@ -19,7 +19,9 @@ attached**. Real hardware plugs in behind the same `Transport` interface.
 - **As-Built coding:** read/decode Ford As-Built blocks, set named features — with
   **mandatory backup-before-write, read-back verification, and one-click restore.**
 - **Live-data logging:** poll PIDs to timestamped CSV.
-- **2016 Ford Fusion S profile:** verified module addresses (`--profile fusion2016`).
+- **2016 Ford Fusion S profile:** the **confirmed-tier** module addresses (`--profile fusion2016`).
+  The underlying data grades modules `confirmed` / `confirm-on-vehicle` / `plausible`; the profile
+  uses only the corroborated `confirmed` tier. Presence of any module is still `NEEDS ON-CAR CHECK`.
 
 ## Quick start
 

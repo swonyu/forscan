@@ -157,7 +157,7 @@ def open_backend(backend: str, port, *, port_factory=None, profile=None):
     """Return (transport, modules, banner) for the chosen backend.
 
     port_factory lets tests inject a fake serial port; production uses pyserial.
-    profile overrides the module list (e.g. 'fusion2016' = verified 2016 Fusion map).
+    profile overrides the module list (e.g. 'fusion2016' = confirmed-tier 2016 Fusion map).
     """
     profile_modules = modules_for_profile(profile)
     if backend == "simulator":
@@ -236,7 +236,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--profile",
         default=None,
         choices=["generic", "fusion2016"],
-        help="module profile for scan/dtc (fusion2016 = verified 2016 Fusion S map)",
+        help="module profile for scan/dtc (fusion2016 = confirmed-tier 2016 Fusion S addresses)",
     )
     parser.add_argument(
         "--backup-file",

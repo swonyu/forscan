@@ -89,9 +89,10 @@ class ObdClient:
     def freeze_frame(self, pid: int, frame: int = 0) -> PidResult:
         """Mode 02: read one PID's frozen value from a freeze frame."""
         resp = self._request(bytes([MODE_FREEZE_FRAME, pid & 0xFF, frame & 0xFF]))
-        # [0x42, pid, frame, ...data]
-        if len(resp) < 3 or resp[1] != (pid & 0xFF):
-            raise ObdError("freeze-frame PID echo mismatch")
+        # [0x42, pid, frame, ...data] — validate BOTH the PID and the frame echo, so
+        # a crossed-wire response for a different record isn't accepted as this one.
+        if len(resp) < 3 or resp[1] != (pid & 0xFF) or resp[2] != (frame & 0xFF):
+            raise ObdError("freeze-frame echo mismatch")
         return decode_pid(pid, resp[3:])
 
     def freeze_frame_dtc(self, frame: int = 0):
