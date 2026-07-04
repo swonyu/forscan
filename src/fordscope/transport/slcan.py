@@ -107,8 +107,11 @@ class SlcanTransport(Transport):
         self._open = True
 
     def close(self) -> None:
-        if self._open:
-            self.port.write(CLOSE_COMMAND)
+        try:
+            if self._open:
+                self.port.write(CLOSE_COMMAND)
+        except Exception:
+            pass  # adapter may be gone (OSError) — release the fd regardless
         self._open = False
         close_port(self.port)
 

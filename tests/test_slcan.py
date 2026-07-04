@@ -118,6 +118,22 @@ class TransportTests(unittest.TestCase):
         t.close()
         self.assertTrue(port.closed)
 
+    def test_close_releases_fd_even_if_close_command_write_raises(self):
+        # Adapter yanked mid-session: the CLOSE_COMMAND write raises OSError. close()
+        # must still release the fd and flip is_open, not propagate and leak.
+        class _CloseWriteRaises(FakeSerial):
+            def write(self, data):
+                if bytes(data) == b"C\r":  # CLOSE_COMMAND
+                    raise OSError("device not configured")
+                return super().write(data)
+
+        port = _CloseWriteRaises()
+        t = SlcanTransport(port)
+        t.open()
+        t.close()  # must not propagate
+        self.assertTrue(port.closed)
+        self.assertFalse(t.is_open)
+
     def test_open_sends_bitrate_then_open(self):
         port = FakeSerial()
         t = SlcanTransport(port, bitrate_kbps=500)
