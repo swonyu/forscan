@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from ..isotp.socket import IsoTpSocket
 from .pids import PidResult, decode_pid, decode_dtcs
+from .dtc_database import DtcInfo, describe_dtc
 
 MODE_CURRENT_DATA = 0x01
 MODE_STORED_DTCS = 0x03
@@ -66,6 +67,10 @@ class ObdClient:
             raise ValueError(f"mode 0x{mode:02X} is not a DTC-read mode")
         resp = self._request(bytes([mode]))
         return decode_dtcs(resp[1:])
+
+    def read_dtcs_described(self, mode: int = MODE_STORED_DTCS) -> list[DtcInfo]:
+        """Like ``read_dtcs`` but each code carries its description/category."""
+        return [describe_dtc(code) for code in self.read_dtcs(mode)]
 
     def clear_dtcs(self) -> None:
         """Mode 04: clear stored DTCs and turn off the MIL."""

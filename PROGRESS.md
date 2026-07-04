@@ -22,7 +22,8 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
 - [x] 1.3 OBD-II (SAE J1979): `ObdClient` — Mode 01 current data, 03/07/0A DTC reads, 04 clear,
       09 VIN; positive/negative handling; `SimulatedObdEcu`
 - [x] 1.4 PID decode table: 16 common PIDs (RPM/coolant/MAF/MAP/fuel-trims/speed/throttle/…) with units
-- [ ] 1.5 DTC read/clear ✅ (done in 1.3) + DTC-definition database (generic + Ford) — DB still to build
+- [x] 1.5 DTC read/clear (in 1.3) + DTC-definition database: curated generic table + structural
+      fallback that flags uncurated/manufacturer codes instead of inventing a meaning
 - [ ] 2.1 Ford enhanced module map + 29-bit addressing (PCM/TCM/ABS/BCM/IPC/APIM/RCM…)
 - [ ] 2.2 ReadDataByIdentifier (0x22) across modules
 - [ ] 3.1 Bidirectional: IOControl (0x2F) + RoutineControl (0x31) scaffolding
@@ -78,3 +79,9 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   `ObdClient` — Mode 01 current data (decoded), 03/07/0A DTC reads, 04 clear, 09 multi-frame VIN,
   positive/negative handling. `simulated_ecu.py`: `SimulatedObdEcu`. +24 tests incl. PID scaling,
   DTC round-trips, clear, multi-frame VIN (94 total, `Ran 94 tests … OK`). Next: DTC-definition DB.
+- **Iter 6** — DTC-definition database (`obd/dtc_database.py`): 35-code curated generic (SAE J2012)
+  table + `describe_dtc` structural fallback (system/subsystem/manufacturer-specific) that returns
+  "no specific definition on file" for uncurated codes instead of fabricating one. `ObdClient
+  .read_dtcs_described`. +8 tests incl. the honesty case (uncurated P0199/manufacturer P1234 get
+  no invented meaning) (102 total, `Ran 102 tests … OK`). Phase 1 generic surface complete; next:
+  Ford enhanced module addressing (Phase 1 §2.1).

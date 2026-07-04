@@ -11,6 +11,7 @@ from .pids import (
 )
 from .client import ObdClient, ObdError, ObdNegativeResponse
 from .simulated_ecu import SimulatedObdEcu
+from .dtc_database import DtcInfo, DTC_DEFINITIONS, describe_dtc
 
 __all__ = [
     "PidDef",
@@ -24,4 +25,7 @@ __all__ = [
     "ObdError",
     "ObdNegativeResponse",
     "SimulatedObdEcu",
+    "DtcInfo",
+    "DTC_DEFINITIONS",
+    "describe_dtc",
 ]
