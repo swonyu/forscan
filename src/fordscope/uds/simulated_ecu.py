@@ -26,6 +26,9 @@ from .services import (
     READ_DTC_INFORMATION,
     REPORT_DTC_BY_STATUS_MASK,
     SECURITY_ACCESS,
+    REQUEST_DOWNLOAD,
+    TRANSFER_DATA,
+    REQUEST_TRANSFER_EXIT,
     TESTER_PRESENT,
     SESSION_DEFAULT,
     SESSION_PROGRAMMING,
@@ -41,6 +44,7 @@ from .services import (
     NRC_REQUEST_SEQUENCE_ERROR,
     NRC_INVALID_KEY,
     NRC_EXCEED_NUMBER_OF_ATTEMPTS,
+    NRC_WRONG_BLOCK_SEQUENCE_COUNTER,
 )
 from .dtc import UdsDtc, encode_dtc_record
 
@@ -57,6 +61,7 @@ class SimulatedUdsEcu:
         security_seed: bytes = b"\x11\x22\x33\x44",
         security_levels=(0x01,),
         security_max_attempts: int = 3,
+        download_max_block: int = 0x0102,
     ) -> None:
         self.dids: Dict[int, bytes] = {int(k): bytes(v) for k, v in (dids or {}).items()}
         self.session: int = SESSION_DEFAULT
@@ -77,6 +82,13 @@ class SimulatedUdsEcu:
         self.unlocked_levels: set = set()
         self.security_attempts = 0
         self._pending_key: Dict[int, bytes] = {}
+        # reflash transfer state (0x34/0x36/0x37)
+        self.download_max_block = download_max_block
+        self._dl_active = False
+        self._dl_seq = 1
+        self._dl_data = bytearray()
+        self._dl_address: Optional[int] = None
+        self.last_download: "Optional[tuple]" = None  # (address, bytes) after exit
 
     def __call__(self, request: bytes) -> Optional[bytes]:
         if not request:
@@ -91,6 +103,9 @@ class SimulatedUdsEcu:
             ROUTINE_CONTROL: self._routine_control,
             READ_DTC_INFORMATION: self._read_dtc_information,
             SECURITY_ACCESS: self._security_access,
+            REQUEST_DOWNLOAD: self._request_download,
+            TRANSFER_DATA: self._transfer_data,
+            REQUEST_TRANSFER_EXIT: self._request_transfer_exit,
             TESTER_PRESENT: self._tester_present,
         }.get(sid)
         if handler is None:
@@ -208,6 +223,42 @@ class SimulatedUdsEcu:
         if self.security_attempts >= self.security_max_attempts:
             return self._nrc(SECURITY_ACCESS, NRC_EXCEED_NUMBER_OF_ATTEMPTS)
         return self._nrc(SECURITY_ACCESS, NRC_INVALID_KEY)
+
+    def _request_download(self, request: bytes) -> Optional[bytes]:
+        # [0x34, dataFormat, ALFID, address..., size...]
+        if len(request) < 3:
+            return self._nrc(REQUEST_DOWNLOAD, NRC_INCORRECT_LENGTH_OR_FORMAT)
+        alfid = request[2]
+        addr_len = alfid & 0x0F
+        size_len = (alfid >> 4) & 0x0F
+        if len(request) < 3 + addr_len + size_len:
+            return self._nrc(REQUEST_DOWNLOAD, NRC_INCORRECT_LENGTH_OR_FORMAT)
+        address = int.from_bytes(request[3 : 3 + addr_len], "big")
+        self._dl_active = True
+        self._dl_seq = 1
+        self._dl_data = bytearray()
+        self._dl_address = address
+        # positive response: lengthFormatIdentifier 0x20 (2-byte max block length)
+        return bytes([self._positive(REQUEST_DOWNLOAD), 0x20]) + self.download_max_block.to_bytes(2, "big")
+
+    def _transfer_data(self, request: bytes) -> Optional[bytes]:
+        if not self._dl_active:
+            return self._nrc(TRANSFER_DATA, NRC_REQUEST_SEQUENCE_ERROR)
+        if len(request) < 2:
+            return self._nrc(TRANSFER_DATA, NRC_INCORRECT_LENGTH_OR_FORMAT)
+        seq = request[1]
+        if seq != self._dl_seq:
+            return self._nrc(TRANSFER_DATA, NRC_WRONG_BLOCK_SEQUENCE_COUNTER)
+        self._dl_data.extend(request[2:])
+        self._dl_seq = (self._dl_seq + 1) & 0xFF
+        return bytes([self._positive(TRANSFER_DATA), seq])
+
+    def _request_transfer_exit(self, request: bytes) -> Optional[bytes]:
+        if not self._dl_active:
+            return self._nrc(REQUEST_TRANSFER_EXIT, NRC_REQUEST_SEQUENCE_ERROR)
+        self.last_download = (self._dl_address, bytes(self._dl_data))
+        self._dl_active = False
+        return bytes([self._positive(REQUEST_TRANSFER_EXIT)])
 
     def _read_dtc_information(self, request: bytes) -> Optional[bytes]:
         # [0x19, subfunction, statusMask]

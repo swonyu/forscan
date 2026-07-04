@@ -54,7 +54,10 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
 - [x] 5.0 SecurityAccess (0x27) seed/key handshake — `UdsClient.request_seed`/`send_key`/`unlock`
       (key_fn user-supplied; NO real Ford algorithm shipped/cracked) + `SimulatedUdsEcu` security
       (levels, invalid-key/exceed-attempts/sequence-error). Gates As-Built writes + reflashing on-car.
-- [ ] 5.1 Flashing state machine (0x34/0x36/0x37), stubbed — needs FDRS keys/calibrations
+- [x] 5.1 Flashing transfer state machine (0x34/0x36/0x37): `UdsClient.request_download`/
+      `transfer_data`/`request_transfer_exit`/`download` (chunks to ECU max-block, block-seq wrap)
+      + `SimulatedUdsEcu` transfer (reassembly, wrongBlockSequenceCounter, sequence errors).
+      PROTOCOL ONLY — no calibration files, no CLI exposure; real reflash needs FDRS keys/data.
 
 ## Tooling
 - [x] `fordscope-build` skill (`.claude/skills/`) + project `CLAUDE.md`
@@ -215,3 +218,10 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   exceedAttempts (0x36), requestSequenceError (0x24), subFunctionNotSupported (unconfigured/level).
   +8 tests (demo XOR-0x5A key). This is what gates real As-Built writes + reflashing on-car.
   254 total, `Ran 254 tests … OK`.
+- **Iter 24** — Reflash transfer state machine (0x34/0x36/0x37), Phase 3 §5.1 — the LAST planned
+  item. `UdsClient.request_download` (returns ECU max block) / `transfer_data` (per-block seq) /
+  `request_transfer_exit` / `download` (chunks data, block-seq wrap). `SimulatedUdsEcu` reassembles
+  the transfer and enforces wrongBlockSequenceCounter (0x73) + sequence errors. PROTOCOL ONLY —
+  no calibration data, deliberately NOT wired to the CLI (bricking risk); real reflash needs a
+  programming session + security unlock + genuine FDRS calibration. +6 tests. 260 total,
+  `Ran 260 tests … OK`. **The entire phased plan (Phases 1–3 + tooling) is now complete.**

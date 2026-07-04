@@ -68,6 +68,7 @@ NRC_EXCEED_NUMBER_OF_ATTEMPTS = 0x36
 NRC_REQUIRED_TIME_DELAY_NOT_EXPIRED = 0x37
 NRC_UPLOAD_DOWNLOAD_NOT_ACCEPTED = 0x70
 NRC_GENERAL_PROGRAMMING_FAILURE = 0x72
+NRC_WRONG_BLOCK_SEQUENCE_COUNTER = 0x73
 NRC_RESPONSE_PENDING = 0x78  # not a final failure — keep waiting
 NRC_SUBFUNCTION_NOT_SUPPORTED_IN_ACTIVE_SESSION = 0x7E
 NRC_SERVICE_NOT_SUPPORTED_IN_ACTIVE_SESSION = 0x7F
@@ -88,6 +89,7 @@ _NRC_NAMES = {
     0x37: "requiredTimeDelayNotExpired",
     0x70: "uploadDownloadNotAccepted",
     0x72: "generalProgrammingFailure",
+    0x73: "wrongBlockSequenceCounter",
     0x78: "requestCorrectlyReceived-ResponsePending",
     0x7E: "subFunctionNotSupportedInActiveSession",
     0x7F: "serviceNotSupportedInActiveSession",

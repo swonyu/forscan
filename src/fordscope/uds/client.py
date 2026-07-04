@@ -24,6 +24,9 @@ from .services import (
     READ_DTC_INFORMATION,
     REPORT_DTC_BY_STATUS_MASK,
     SECURITY_ACCESS,
+    REQUEST_DOWNLOAD,
+    TRANSFER_DATA,
+    REQUEST_TRANSFER_EXIT,
     TESTER_PRESENT,
     ROUTINE_START,
     ROUTINE_STOP,
@@ -211,6 +214,60 @@ class UdsClient:
             return  # already unlocked
         key = key_fn(bytes(seed))
         self.send_key(level + 1, key)
+
+    # --- Reflashing transfer (0x34/0x36/0x37) ---------------------------
+    # DANGER / HONESTY: this moves arbitrary bytes into a module's memory and can
+    # BRICK it. A real reflash needs a programming session, SecurityAccess unlock,
+    # and genuine Ford calibration data (from FDRS) — FordScope ships NONE of that.
+    # This is the transfer PROTOCOL only, and is intentionally not exposed in the CLI.
+    def request_download(
+        self, address: int, size: int, *, data_format: int = 0x00,
+        addr_len: int = 4, size_len: int = 4,
+    ) -> int:
+        """RequestDownload (0x34). Returns the ECU's max block length per TransferData."""
+        alfid = ((size_len & 0x0F) << 4) | (addr_len & 0x0F)
+        req = (
+            bytes([REQUEST_DOWNLOAD, data_format, alfid])
+            + address.to_bytes(addr_len, "big")
+            + size.to_bytes(size_len, "big")
+        )
+        resp = self.request(req)
+        assert resp is not None
+        if len(resp) < 2:
+            raise UnexpectedResponseError("malformed RequestDownload response")
+        n = (resp[1] >> 4) & 0x0F
+        return int.from_bytes(resp[2 : 2 + n], "big")
+
+    def transfer_data(self, block_seq: int, data: bytes) -> bytes:
+        """TransferData (0x36) for one block. Returns any transfer-response parameters."""
+        resp = self.request(bytes([TRANSFER_DATA, block_seq & 0xFF]) + bytes(data))
+        assert resp is not None
+        if len(resp) < 2 or resp[1] != (block_seq & 0xFF):
+            raise UnexpectedResponseError("TransferData block-sequence echo mismatch")
+        return resp[2:]
+
+    def request_transfer_exit(self, data: bytes = b"") -> bytes:
+        """RequestTransferExit (0x37) — completes the transfer."""
+        resp = self.request(bytes([REQUEST_TRANSFER_EXIT]) + bytes(data))
+        assert resp is not None
+        return resp[1:]
+
+    def download(self, address: int, data: bytes, **kwargs) -> int:
+        """Full transfer: RequestDownload -> TransferData* -> RequestTransferExit.
+
+        Chunks ``data`` to the ECU's max block length and returns the block count.
+        See the DANGER note above — prerequisites (programming session, security
+        unlock, real calibration) are the caller's responsibility.
+        """
+        max_block = self.request_download(address, len(data), **kwargs)
+        chunk = max(1, max_block - 2)  # leave room for the SID + block-sequence byte
+        seq, blocks = 1, 0
+        for i in range(0, len(data), chunk):
+            self.transfer_data(seq, data[i : i + chunk])
+            seq = (seq + 1) & 0xFF
+            blocks += 1
+        self.request_transfer_exit()
+        return blocks
 
     def read_dtc_information(self, status_mask: int = 0xFF) -> "list[UdsDtc]":
         """ReadDTCInformation (0x19 / reportDTCByStatusMask). Returns decoded DTCs."""
