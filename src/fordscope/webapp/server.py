@@ -77,8 +77,10 @@ function setBanner(t){const b=document.getElementById('banner');b.textContent=t|
  b.className='banner'+(t&&t.indexOf('LIVE')>=0?' live':(t?' sim':''));}
 async function connect(){const port=document.getElementById('port').value;
  const profile=document.getElementById('profile').value||null;
- const r=await fetch('/api/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({port,profile})});
+ setBanner('Connecting…');  // a real adapter's init handshake can take a few seconds
+ try{const r=await fetch('/api/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({port,profile})});
  const j=await r.json();setBanner(j.banner||j.error);}
+ catch(e){setBanner('Connection failed — is the FordScope app still running?');}}
 async function disconnect(){await fetch('/api/disconnect',{method:'POST'});setBanner('');document.getElementById('out').textContent='';}
 async function run(url){const r=await fetch(url);const j=await r.json();if(j.banner)setBanner(j.banner);
  document.getElementById('out').textContent=j.text||j.vin||j.error||JSON.stringify(j,null,2);}

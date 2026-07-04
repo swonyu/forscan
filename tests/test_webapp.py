@@ -380,6 +380,15 @@ class ServerTests(unittest.TestCase):
         # the live fetch must be wrapped so a rejection routes to stopLive(), not the void
         self.assertRegex(INDEX_HTML, r"try\{const r=await fetch\('/api/live")
 
+    def test_connect_shows_progress_and_handles_failure(self):
+        # Regression guard (behavior browser-verified in iter 118): a real adapter's init
+        # handshake can block a few seconds, so connect() must show immediate "Connecting…"
+        # feedback (not a frozen GUI), and its fetch must be wrapped so a lost connection
+        # shows a clear message instead of silently doing nothing.
+        from fordscope.webapp.server import INDEX_HTML
+        self.assertIn("Connecting", INDEX_HTML)          # immediate progress feedback
+        self.assertIn("Connection failed", INDEX_HTML)   # clear message on fetch rejection
+
     def test_index_page_exposes_new_feature_buttons(self):
         # The newer endpoints (calibration/Mode06/dtc-states/drive-cycle) must be
         # directly reachable from the Mac-app UI, not only via the health report.

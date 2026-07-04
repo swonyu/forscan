@@ -916,6 +916,18 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   reject and confirmed the table shows the message AND `liveTimer===null` (polling stopped), console
   clean. Added a structural regression guard (`test_live_poll_handles_lost_connection`). +1 test →
   **439 green**. (Transient preview launch.json created in the cwd for the run, removed after.)
+- **Iter 118** (connect UX — progress feedback + failure handling; browser-VERIFIED) — Investigated the
+  high-value real-world concern first: does connecting to an UNRESPONSIVE adapter (wrong port / unpowered
+  / car off — very common) HANG the tool? Checked `open_serial_port` — the pyserial port is opened with
+  `timeout=1.0`, so `_read_until_prompt` breaks on empty reads: NO hang (already handled, honest clean
+  result). But it surfaced a real Phase-4 GUI issue: elm327 `open()` does ~7 handshake reads, so a slow/
+  dead real adapter blocks connect for up to ~7s, and `connect()` only updated the banner AFTER the fetch
+  resolved — so the GUI showed NOTHING and looked frozen. Fixed: show immediate `Connecting…` feedback,
+  and (applying iter-117's lesson) wrapped the connect fetch in try/catch → `Connection failed — is the
+  FordScope app still running?` on a network rejection instead of a silent no-op. **Verified BY RUNNING**:
+  `node --check` (parses), then Claude Preview drove all three — immediate banner `Connecting…`, happy
+  path → `SIMULATED` banner, `fetch`-reject → the failure message; console clean. Structural regression
+  guard added. +1 test → **440 green**. (Transient launch.json created for the run, removed after.)
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the
