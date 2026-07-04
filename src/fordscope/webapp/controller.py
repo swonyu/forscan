@@ -19,7 +19,7 @@ import threading
 from typing import List, Optional
 
 from ..cli import open_backend, list_serial_ports
-from ..isotp import IsoTpSocket
+from ..isotp import IsoTpSocket, IsoTpError
 from ..obd import ObdClient, ObdError, ObdNegativeResponse, PID_TABLE
 from ..obd.drive_cycle import drive_cycle_tips
 
@@ -148,7 +148,7 @@ class FordScopeController:
                 return {"codes": codes, "available": True}
             except ObdNegativeResponse:
                 return {"codes": [], "available": True}
-            except (ObdError, KeyError, ValueError):
+            except (ObdError, IsoTpError, KeyError, ValueError):
                 return {"codes": [], "available": False}
 
         return {
@@ -172,7 +172,7 @@ class FordScopeController:
         try:
             r = self._obd().current_data(pid)
             return {"pid": pid, "name": r.name, "value": r.value, "unit": r.unit}
-        except (ObdError, KeyError, ValueError):
+        except (ObdError, IsoTpError, KeyError, ValueError):
             # PID valid-hex but not supported/decodable by this ECU — blank it,
             # exactly like live()/log() do, rather than surfacing a server error.
             return {
@@ -196,7 +196,7 @@ class FordScopeController:
                 r = obd.current_data(pid)
                 rows.append({"pid": pid, "name": r.name, "value": r.value, "unit": r.unit})
                 self._accumulate(pid, r)
-            except (ObdError, KeyError, ValueError):
+            except (ObdError, IsoTpError, KeyError, ValueError):
                 rows.append({"pid": pid, "name": f"PID {pid:02X}", "value": None, "unit": ""})
         return rows
 
@@ -249,7 +249,7 @@ class FordScopeController:
         for mid in (mids or _COMMON_MODE06_MIDS):
             try:
                 tests = obd.monitor_tests(mid)
-            except (ObdError, KeyError, ValueError):
+            except (ObdError, IsoTpError, KeyError, ValueError):
                 continue  # ECU doesn't support this monitor
             if not tests:
                 continue
@@ -277,7 +277,7 @@ class FordScopeController:
         def _safe(fn):
             try:
                 return fn()
-            except (ObdError, KeyError, ValueError):
+            except (ObdError, IsoTpError, KeyError, ValueError):
                 return []
 
         return {
@@ -420,7 +420,7 @@ class FordScopeController:
             try:
                 r = obd.freeze_frame(pid)
                 rows.append({"pid": pid, "name": r.name, "value": r.value, "unit": r.unit})
-            except (ObdError, KeyError, ValueError):
+            except (ObdError, IsoTpError, KeyError, ValueError):
                 pass  # this PID isn't in the freeze frame -> omit
         return {"dtc": dtc, "rows": rows}
 

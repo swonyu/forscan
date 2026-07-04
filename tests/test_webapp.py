@@ -264,6 +264,39 @@ class ControllerTests(unittest.TestCase):
         self.assertIsNone(r["value"])
         self.assertFalse(r.get("supported", True))
 
+    def test_malformed_frame_blanks_pid_not_server_error(self):
+        # Bus NOISE on a real adapter -> a malformed ISO-TP frame -> IsoTpError, which
+        # is a DIFFERENT hierarchy than ObdError. It must degrade to a blank PID (like an
+        # unsupported one), NOT leak past read_pid into an HTTP 500 -- and on the 1 Hz
+        # live dashboard a single noise frame must not error the whole sample.
+        class MalformedElmPort:
+            def __init__(self, *a, **k):
+                self._armed = None
+
+            def write(self, data):
+                text = bytes(data).decode("ascii", "ignore").strip()
+                if text and not text.upper().startswith("AT"):
+                    self._armed = "7E8 95 41 0C 0F A0 00 00 00"  # PCI nibble 9 = unknown
+                return len(data)
+
+            def read(self, n=1):
+                if self._armed is not None:
+                    block, self._armed = self._armed, None
+                    return (block + "\r>").encode("ascii")
+                return b">"
+
+            def close(self):
+                pass
+
+        c = FordScopeController(port_factory=lambda _name: MalformedElmPort())
+        c.connect("/dev/cu.usbserial-NOISE")
+        r = c.read_pid(0x0C)  # must NOT raise IsoTpError
+        self.assertIsNone(r["value"])
+        self.assertFalse(r.get("supported", True))
+        # live() must blank the noisy PID too, not error the whole sample.
+        rows = c.live([0x0C])
+        self.assertIsNone(rows[0]["value"])
+
     def test_connect_empty_port_gives_clear_error(self):
         # An empty/missing port must fail with a clear "select a port" message,
         # not leak the live-backend pyserial dependency error.

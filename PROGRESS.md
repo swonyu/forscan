@@ -882,6 +882,17 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   rule is "extend deliberately, never invent"). Proper TDD: wrote `test_completed_generic_series_siblings`
   FIRST, confirmed RED (`P0307` → definition None), then added the codes → GREEN. +1 test / +12 codes →
   **436 green**. (Unknown codes still get the honest structural fallback; nothing invented.)
+- **Iter 115** (SAFETY/robustness — bus-noise IsoTpError no longer 500s the GUI) — Real PRODUCTION
+  bug found by tracing the GUI error path: the controller's six graceful-degradation handlers caught
+  `(ObdError, KeyError, ValueError)` but NOT `IsoTpError` — a separate exception hierarchy. So an
+  unsupported PID degraded to a blank, but a malformed ISO-TP frame (bus NOISE on a real car —
+  cross-talk, marginal wiring, flaky adapter) leaked `IsoTpError` past `read_pid` into an HTTP 500,
+  and on the 1 Hz `live()` dashboard one noise frame would error the whole sample. Verified the leak
+  empirically (`read_pid` on a PCI-nibble-0x9 frame raised `IsoTpError`), wrote the RED test, then
+  added `IsoTpError` to all six catch sites (read_pid, live, dtc_states, monitor_tests, calibration
+  `_safe`, freeze) so bus noise degrades exactly like an unsupported read everywhere. Caught my OWN
+  `replace_all` miss — line 175 (`read_pid`, different indent) wasn't updated by the bulk edit; grep
+  verification (5≠6) surfaced it, fixed it. +1 test → **437 green**.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the
