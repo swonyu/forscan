@@ -11,8 +11,10 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
 
 ## Phase 1 — Diagnostics foundation (Tiers 0–3)
 - [x] 0.1 Transport abstraction: `CanFrame` + `Transport` ABC + `SimulatorTransport`
-- [ ] 0.2 Real backends behind the same ABC: slcan/CANable, then Openport [NEEDS ON-CAR CHECK]
-- [ ] 1.1 ISO-TP (ISO 15765-2): single-frame + multi-frame segmentation/reassembly
+- [ ] 0.2 Real backends behind the same ABC — DEFERRED (device I/O is [NEEDS ON-CAR CHECK];
+      the slcan ASCII codec is testable and will land as a unit before wiring real serial)
+- [x] 1.1a ISO-TP frame codec: SF/FF/CF/FC encode + parse (pure, hand-derived fixtures)
+- [ ] 1.1b ISO-TP transport layer: stateful segmentation/reassembly + flow control over a `Transport`
 - [ ] 1.2 UDS client (ISO 14229): request/response, negative-response codes, session control
 - [ ] 1.3 OBD-II (SAE J1979) modes 01–0A on top of ISO-TP
 - [ ] 1.4 PID decode table (RPM, coolant, MAF, MAP, fuel trims, speed, …) with units
@@ -36,3 +38,8 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   (validated, frozen, 11/29-bit) + `Transport` ABC (context-manager) + `SimulatorTransport`
   with swappable responders (`null`/`echo`/`canned_obd`). 19 unit tests, all passing on the
   simulator (`./run_tests.sh` → `Ran 19 tests … OK`). No hardware touched.
+- **Iter 2** — ISO-TP frame codec (`isotp/frames.py`): the four PCI types (SF/FF/CF/FC)
+  encode + `parse_isotp`/`pci_type`, classic-CAN 8-byte "normal" addressing, 12-bit FF
+  length, CAN-FD/32-bit escapes explicitly rejected. +21 tests (40 total,
+  `Ran 40 tests … OK`). Reordered plan: real hardware backends (0.2) deferred as
+  on-car-only; building the fully-simulatable protocol stack (ISO-TP → UDS → OBD-II) first.
