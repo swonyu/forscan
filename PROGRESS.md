@@ -872,6 +872,16 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   (7E1); `scan_vehicle` correctly reports `[OK] PCM` + `[--] TCM` in one scan. Proves the flagship
   user action (whole-car scan) over the real wire codec, exercising the mixed present+absent
   distinction never covered before. +1 test → **435 green**.
+- **Iter 114** (DTC database — safe series completions; genuine FUNCTIONAL value) — A different
+  category from the test-coverage thread: actual product value. The curated DTC table stopped
+  mid-series — misfire at cyl 6 (P0301-06), injectors at cyl 4 (P0201-04), ignition coils at B
+  (P0351-52) — so a common V6/V8 Ford (F-150, Mustang GT, Explorer) with a cyl-7/8 misfire, cyl-5-8
+  injector, or coil-C-H fault fell to the structural fallback instead of a named definition. Added the
+  12 mechanical SAE J2012 SIBLINGS that complete those series (P0205-08, P0307-08, P0353-58) — safest
+  possible expansion (each follows the EXACT verified pattern of an already-curated entry; the design
+  rule is "extend deliberately, never invent"). Proper TDD: wrote `test_completed_generic_series_siblings`
+  FIRST, confirmed RED (`P0307` → definition None), then added the codes → GREEN. +1 test / +12 codes →
+  **436 green**. (Unknown codes still get the honest structural fallback; nothing invented.)
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the

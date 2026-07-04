@@ -124,6 +124,20 @@ DTC_DEFINITIONS = {
     "U0101": "Lost Communication With Transmission Control Module (TCM)",
     "U0140": "Lost Communication With Body Control Module (BCM)",
     "U0155": "Lost Communication With Instrument Panel Cluster (IPC) Control Module",
+    # --- series completions (SAE J2012): mechanical siblings of curated entries so
+    #     common V6/V8 Fords are recognized, not dropped to the structural fallback ---
+    "P0205": "Injector Circuit/Open - Cylinder 5",
+    "P0206": "Injector Circuit/Open - Cylinder 6",
+    "P0207": "Injector Circuit/Open - Cylinder 7",
+    "P0208": "Injector Circuit/Open - Cylinder 8",
+    "P0307": "Cylinder 7 Misfire Detected",
+    "P0308": "Cylinder 8 Misfire Detected",
+    "P0353": "Ignition Coil C Primary/Secondary Circuit",
+    "P0354": "Ignition Coil D Primary/Secondary Circuit",
+    "P0355": "Ignition Coil E Primary/Secondary Circuit",
+    "P0356": "Ignition Coil F Primary/Secondary Circuit",
+    "P0357": "Ignition Coil G Primary/Secondary Circuit",
+    "P0358": "Ignition Coil H Primary/Secondary Circuit",
 }
 
 

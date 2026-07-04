@@ -40,6 +40,18 @@ class CuratedLookupTests(unittest.TestCase):
         from fordscope.obd.dtc_database import DTC_DEFINITIONS
         self.assertGreater(len(DTC_DEFINITIONS), 70)
 
+    def test_completed_generic_series_siblings(self):
+        # V6/V8 Fords are common, so the misfire (cyl 1-8), injector (cyl 1-8), and
+        # ignition-coil (A-H) SERIES must be complete rather than stopping mid-series
+        # at the low-cylinder entries. These are mechanical SAE J2012 siblings of
+        # already-curated codes (P0301-06 / P0201-04 / P0351-52) -- zero invention.
+        self.assertEqual(describe_dtc("P0307").definition, "Cylinder 7 Misfire Detected")
+        self.assertEqual(describe_dtc("P0308").definition, "Cylinder 8 Misfire Detected")
+        self.assertEqual(describe_dtc("P0205").definition, "Injector Circuit/Open - Cylinder 5")
+        self.assertEqual(describe_dtc("P0208").definition, "Injector Circuit/Open - Cylinder 8")
+        self.assertEqual(describe_dtc("P0353").definition, "Ignition Coil C Primary/Secondary Circuit")
+        self.assertEqual(describe_dtc("P0358").definition, "Ignition Coil H Primary/Secondary Circuit")
+
 
 class FallbackHonestyTests(unittest.TestCase):
     def test_uncurated_code_gets_no_fabricated_definition(self):
