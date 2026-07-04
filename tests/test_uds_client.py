@@ -184,6 +184,20 @@ class ResponsePendingTests(unittest.TestCase):
             client.request(bytes([0x22, 0x01, 0x02]))
 
 
+class SecurityAccessRobustnessTests(unittest.TestCase):
+    def test_empty_seed_is_rejected_not_treated_as_unlocked(self):
+        # A positive SecurityAccess response with a correct echo but a ZERO-LENGTH
+        # seed (truncation/glitch) must raise — NOT be silently treated as
+        # already-unlocked, which would skip the key exchange while the caller
+        # believes SecurityAccess succeeded.
+        sock = _RecordingSocket([bytes([0x67, 0x01])])  # echo ok, empty seed
+        client = UdsClient(sock)
+        called = []
+        with self.assertRaises(UnexpectedResponseError):
+            client.unlock(lambda seed: called.append(seed) or b"\x00", level=0x01)
+        self.assertEqual(called, [])  # key_fn must never be invoked
+
+
 class _RecordingSocket:
     """Minimal IsoTpSocket stand-in: scripts recv() responses and records the
     timeout each recv() was called with."""

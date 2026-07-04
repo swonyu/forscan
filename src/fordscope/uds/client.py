@@ -235,7 +235,13 @@ class UdsClient:
         assert resp is not None
         if len(resp) < 2 or resp[1] != (level & 0xFF):
             raise UnexpectedResponseError("SecurityAccess seed echo mismatch")
-        return resp[2:]
+        seed = resp[2:]
+        # An EMPTY seed (truncated/glitched response) must not be confused with the
+        # already-unlocked signal, which is a normal-length ALL-ZERO seed. Reject it,
+        # else unlock() would skip the key exchange thinking the ECU is unlocked.
+        if not seed:
+            raise UnexpectedResponseError("SecurityAccess seed is empty (malformed response)")
+        return seed
 
     def send_key(self, key_level: int, key: bytes) -> None:
         """Send the computed key at an even sub-function level (seed level + 1)."""
