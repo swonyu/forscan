@@ -21,6 +21,8 @@ from ..services import (
     format_scan_report,
     scan_vehicle_dtcs,
     format_dtc_report,
+    DataLogger,
+    rows_to_csv,
 )
 
 DEMO_PORT = "Demo (simulator)"
@@ -128,6 +130,13 @@ class FordScopeController:
                 "decodable": d is not None,
             })
         return rows
+
+    def log_csv(self, pids, samples: int = 10) -> str:
+        """Capture ``samples`` fast readings of ``pids`` and return CSV text.
+        (A burst capture; the CLI `log --interval` does timed drive logs.)"""
+        self._require()
+        rows = DataLogger(self._obd(), pids).run(samples, interval=0.0)
+        return rows_to_csv(rows, pids)
 
     def clear_dtcs(self) -> None:
         """Clear stored trouble codes (OBD Mode 04) — a real mutating action; the

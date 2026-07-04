@@ -51,6 +51,7 @@ INDEX_HTML = """<!doctype html>
   <button onclick="startLive()">Start live</button>
   <button onclick="stopLive()">Stop</button>
   <button onclick="showSupported()">Supported PIDs</button>
+  <input id="logsamples" value="10" size="4" title="samples"><button onclick="downloadLog()">Download log (CSV)</button>
 </div>
 <div id="supported" class="row"></div>
 <table id="live"></table>
@@ -84,6 +85,9 @@ async function pollLive(){const pids=document.getElementById('livepids').value;
  t.innerHTML=(j.rows||[]).map(x=>'<tr><td>'+x.name+'</td><td>'+(x.value==null?'—':x.value+' '+x.unit)+'</td></tr>').join('');}
 function startLive(){stopLive();pollLive();liveTimer=setInterval(pollLive,1000);}
 function stopLive(){if(liveTimer){clearInterval(liveTimer);liveTimer=null;}}
+function downloadLog(){const pids=document.getElementById('livepids').value;
+ const n=document.getElementById('logsamples').value;
+ window.location='/api/log?pids='+encodeURIComponent(pids)+'&samples='+encodeURIComponent(n);}
 function addLive(hex){const i=document.getElementById('livepids');
  const cur=i.value.split(',').map(s=>s.trim()).filter(Boolean);
  if(!cur.includes(hex)){cur.push(hex);i.value=cur.join(',');}}
@@ -116,6 +120,15 @@ def _make_handler(controller: FordScopeController):
             self.end_headers()
             self.wfile.write(body)
 
+        def _csv(self, text, filename="fordscope-log.csv"):
+            body = text.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv")
+            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         def _body_json(self):
             length = int(self.headers.get("Content-Length", 0) or 0)
             if not length:
@@ -144,6 +157,11 @@ def _make_handler(controller: FordScopeController):
                     return self._json({"rows": controller.live(pids), "banner": controller.banner})
                 if u.path == "/api/supported":
                     return self._json({"pids": controller.supported_pids(), "banner": controller.banner})
+                if u.path == "/api/log":
+                    q = parse_qs(u.query)
+                    pids = [int(p, 16) for p in q.get("pids", ["0C,05,0D"])[0].split(",") if p.strip()]
+                    samples = min(int(q.get("samples", ["10"])[0]), 1000)
+                    return self._csv(controller.log_csv(pids, samples))
                 return self._json({"error": "not found"}, 404)
             except NotConnectedError as exc:
                 return self._json({"error": str(exc)}, 409)

@@ -265,6 +265,11 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   "Supported PIDs" button that lists them as clickable chips; a click adds the PID to the live
   dashboard input (point-and-click, no hex typing). +3 tests; verified by running (endpoint returns
   05/0C/0D named). 291 total, `Ran 291 tests … OK`.
+- **Iter 33** — CSV export from the Mac app. `controller.log_csv(pids, samples)` (reuses the
+  `DataLogger` engine) + `GET /api/log?pids=…&samples=N` serving `text/csv` with a download
+  disposition (samples capped at 1000) + a "Download log (CSV)" button (`window.location` →
+  browser download). +3 tests; verified by running (200, `text/csv`, attachment, real rows).
+  294 total, `Ran 294 tests … OK`.
 - **Iter 27** — Completed adversarial review coverage (CLI + scan services, the last un-reviewed
   logic). **1 more real bug found & fixed test-first** (268 total green): `scan_module` /
   `scan_module_dtcs` only caught `UdsError`, but `IsoTpSocket` raises a separate `IsoTpError`

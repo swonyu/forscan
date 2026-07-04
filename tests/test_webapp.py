@@ -71,6 +71,15 @@ class ControllerTests(unittest.TestCase):
         c.connect(DEMO_PORT)
         c.clear_dtcs()  # no exception
 
+    def test_log_csv(self):
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        csv = c.log_csv([0x0C, 0x05], samples=3)
+        lines = csv.strip().splitlines()
+        self.assertIn("Engine RPM (rpm)", lines[0])
+        self.assertEqual(len(lines), 4)  # header + 3 sample rows
+        self.assertIn("1000.0", lines[1])
+
 
 class ServerTests(unittest.TestCase):
     def setUp(self):
@@ -150,6 +159,17 @@ class ServerTests(unittest.TestCase):
 
     def test_supported_before_connect_returns_409(self):
         status, _raw = self._req("GET", "/api/supported")
+        self.assertEqual(status, 409)
+
+    def test_log_endpoint_returns_csv(self):
+        self._json("POST", "/api/connect", {"port": DEMO_PORT})
+        status, raw = self._req("GET", "/api/log?pids=0C,05&samples=2")
+        self.assertEqual(status, 200)
+        self.assertIn(b"Engine RPM (rpm)", raw)
+        self.assertIn(b"1000.0", raw)
+
+    def test_log_before_connect_returns_409(self):
+        status, _raw = self._req("GET", "/api/log?pids=0C&samples=2")
         self.assertEqual(status, 409)
 
 
