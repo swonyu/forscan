@@ -71,6 +71,15 @@ class ControllerTests(unittest.TestCase):
         c.connect(DEMO_PORT)
         c.clear_dtcs()  # no exception
 
+    def test_readiness(self):
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        rd = c.readiness()
+        self.assertTrue(rd["mil_on"])
+        self.assertEqual(rd["dtc_count"], 1)
+        self.assertFalse(rd["ready"])
+        self.assertIn("Oxygen sensor", rd["not_ready"])
+
     def test_freeze_frame(self):
         c = FordScopeController()
         c.connect(DEMO_PORT)
@@ -189,6 +198,17 @@ class ServerTests(unittest.TestCase):
 
     def test_freeze_before_connect_returns_409(self):
         status, _raw = self._req("GET", "/api/freeze")
+        self.assertEqual(status, 409)
+
+    def test_readiness_endpoint(self):
+        self._json("POST", "/api/connect", {"port": DEMO_PORT})
+        _s, j = self._json("GET", "/api/readiness")
+        self.assertTrue(j["mil_on"])
+        self.assertFalse(j["ready"])
+        self.assertIn("Oxygen sensor", j["not_ready"])
+
+    def test_readiness_before_connect_returns_409(self):
+        status, _raw = self._req("GET", "/api/readiness")
         self.assertEqual(status, 409)
 
 

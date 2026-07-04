@@ -291,6 +291,11 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   `.ready`/`.not_ready`); spark vs compression monitor name sets; complete == supported and not
   the *incomplete* bit (the inversion, tested). `ObdClient.monitor_status()`. +5 tests hand-derived.
   Engine layer; wires into the Mac app next ("will it pass inspection?"). 316 total, `Ran 316 … OK`.
+- **Iter 38** — Readiness in the Mac app. `controller.readiness()` + `GET /api/readiness` + a
+  "Readiness" button with a plain PASS / NOT-READY verdict (ready AND MIL-off), MIL, DTC count,
+  and which monitors aren't complete. Demo PCM seeded with a coherent status (MIL on, 1 DTC,
+  O2-sensor monitor incomplete → NOT READY). Filtered status PIDs (0x01/0x02) out of the live-
+  dashboard picker (not gauges). +3 tests; verified by running. 319 total, `Ran 319 tests … OK`.
 - **Iter 27** — Completed adversarial review coverage (CLI + scan services, the last un-reviewed
   logic). **1 more real bug found & fixed test-first** (268 total green): `scan_module` /
   `scan_module_dtcs` only caught `UdsError`, but `IsoTpSocket` raises a separate `IsoTpError`

@@ -14,8 +14,10 @@ from ..cli import open_backend
 from ..isotp import IsoTpSocket
 from ..obd import ObdClient, ObdError, PID_TABLE
 
-# Meta query PIDs (supported-PID range markers) — not user-facing data PIDs.
+# Range-marker PIDs (0x00/0x20/…) plus status PIDs (0x01 monitor status, 0x02
+# freeze-DTC pointer) — none are live-gauge scalars, so keep them out of the picker.
 _META_PIDS = {0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0, 0xE0}
+_NON_SCALAR_PIDS = _META_PIDS | {0x01, 0x02}
 from ..services import (
     scan_vehicle,
     format_scan_report,
@@ -120,7 +122,7 @@ class FordScopeController:
         self._require()
         rows = []
         for pid in self._obd().supported_pids():
-            if pid in _META_PIDS:
+            if pid in _NON_SCALAR_PIDS:
                 continue
             d = PID_TABLE.get(pid)
             rows.append({
@@ -130,6 +132,17 @@ class FordScopeController:
                 "decodable": d is not None,
             })
         return rows
+
+    def readiness(self) -> dict:
+        """I/M readiness: MIL, DTC count, inspection-readiness + which monitors aren't complete."""
+        self._require()
+        ms = self._obd().monitor_status()
+        return {
+            "mil_on": ms.mil_on,
+            "dtc_count": ms.dtc_count,
+            "ready": ms.ready,
+            "not_ready": ms.not_ready,
+        }
 
     def freeze_frame(self, pids=None) -> dict:
         """The freeze frame: the DTC that triggered it + frozen PID values."""

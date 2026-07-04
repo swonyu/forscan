@@ -59,7 +59,11 @@ def build_demo_vehicle() -> Tuple[SimulatorTransport, List[AddressPair]]:
     pcm = SimulatedIsoTpEcu(
         _combined(
             SimulatedObdEcu(
-                pids={0x0C: bytes([0x0F, 0xA0]), 0x05: bytes([90]), 0x0D: bytes([0x40])},
+                pids={
+                    0x0C: bytes([0x0F, 0xA0]), 0x05: bytes([90]), 0x0D: bytes([0x40]),
+                    # monitor status: MIL on, 1 DTC, O2-sensor monitor not complete
+                    0x01: bytes([0x81, 0x07, 0x21, 0x20]),
+                },
                 dtcs=["P0143"],
                 vin=DEMO_VIN,
                 # frozen snapshot captured when P0143 set: idling, warm, stopped
