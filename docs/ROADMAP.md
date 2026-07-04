@@ -96,8 +96,23 @@ regardless of tier (the decode is what we verify against the spec).
 
 ---
 
-## Build order (as of 2026-07-04)
-R1 → R2 → R3 → R6 → R4 → R5, interleaved with a review pass each iteration.
-R7 is authored-but-UNVERIFIED whenever convenient; R8 waits on the owner.
-When R1–R6 are done: **stop feature-manufacturing**, shift to hardening/docs/review, and
-say so plainly in `PROGRESS.md`.
+## Build order (as of 2026-07-04, updated)
+**Done:** R1 (iters 49–50), R2 (iter 51), R6 (iter 52).
+**Blocked on verified research:** R3 (drive-cycle coach) and R5 (Mode 06) — the 2026-07-04
+deep-research run did NOT return verified drive-cycle/TID facts (verifiers rate-limited, not
+refuted; see `docs/RESEARCH_2026-07-04_ford_diagnostics.md`). **Do not build R3/R5 until those
+angles are re-run and verified** — no unverified drive-cycle/Mode-06 claims enter the tool.
+**Next buildable:** R4 (live PID graphing) — research-independent; verify by launching the app
+(preview tools), since the SVG render is browser-side.
+R7 authored-but-UNVERIFIED whenever convenient; R8 waits on the owner.
+When R1–R6 are done: **stop feature-manufacturing**, shift to hardening/docs/review, say so in `PROGRESS.md`.
+
+## Research + audit status (2026-07-04)
+- **Deep-research (adapter/host layer): DONE + indexed** → `docs/RESEARCH_2026-07-04_ford_diagnostics.md`
+  (7 verified claims: MS-CAN switching, no-native-macOS, OBDLink-EX-is-the-FORScan-reference, FORScan
+  "All" module). Reinforces the project; adapter guidance for R8.
+- **Deep-research (4 diagnostic angles): FAILED to verify (rate-limit) — RE-RUN needed** for R3/R5.
+- **Safety/security/honesty/robustness audit: FAILED (all 6 auditors rate-limited) — RE-RUN needed.**
+  The workflow script was fixed so a rate-limited run now reports INCOMPLETE, never false-clean.
+- **Re-run discipline:** serialize big fan-out workflows — do NOT overlap them (overlap is what
+  tripped the shared rate-limit on 2026-07-04).

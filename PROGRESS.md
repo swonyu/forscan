@@ -442,3 +442,17 @@ feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and 
   pending-vs-permanent distinction (why a permanent code won't clear on a scan-tool wipe). Demo
   PCM seeded with pending P0113 + permanent P0420 for end-to-end demonstration. +4 tests
   (split-by-state + meaning, before-connect raise, endpoint, 409), RED-first. 362 green.
+- **Iter 53** — Sim fixed-width consistency (from an adversarial audit of the iter 49–52 code,
+  which was otherwise clean): `_info_items` truncated CVN but not CALID/ECU-name, so an over-long
+  fixture would emit >16/>20 bytes and mis-split on decode. All three item types now truncate to
+  wire width. +1 test. 363 green.
+- **Iter 54** (docs/research) — Indexed the 2026-07-04 deep-research →
+  `docs/RESEARCH_2026-07-04_ford_diagnostics.md`. **Honest split:** 7 claims verified, all
+  adapter/host-layer (MS-CAN switching for Ford comfort modules; FORScan/adapters have NO native
+  macOS → FordScope's raison d'être; OBDLink EX is the FORScan-endorsed reference, vLinker FS pulled
+  Feb-2025 over a compat issue; FORScan "All" virtual module). The **four core diagnostic angles
+  (enhanced PIDs, As-Built format, drive-cycle conditions, Mode 06) returned ZERO verified claims —
+  verifiers rate-limited, not refuted → R3/R5 STAY BLOCKED.** Also: the safety/honesty/robustness
+  audit workflow FAILED (all 6 auditors rate-limited) and its script had a **false-clean bug**
+  (null auditor → "no findings"); fixed to report INCOMPLETE. Both failed workflows need
+  **serialized** re-runs (overlap tripped the shared rate-limit). No code/behavior change.
