@@ -145,6 +145,19 @@ class FileBackupStoreTests(unittest.TestCase):
             self.assertEqual(reopened.load("TESTVIN:5000"), ORIGINAL)
             self.assertIsNone(reopened.load("TESTVIN:6000"))
 
+    def test_failed_flush_does_not_poison_in_memory_state(self):
+        # save() must persist BEFORE committing in-memory, so a failed flush never
+        # leaves has()==True for a backup that was never durably written — otherwise
+        # a later write_block() in the same process would be wrongly permitted.
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "backups.json")
+            store = FileBackupStore(path)
+            with mock.patch("json.dump", side_effect=OSError("disk full")):
+                with self.assertRaises(OSError):
+                    store.save("TESTVIN:5000", ORIGINAL)
+            self.assertFalse(store.has("TESTVIN:5000"))  # not persisted -> not "backed up"
+
 
 if __name__ == "__main__":
     unittest.main()

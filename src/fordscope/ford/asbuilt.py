@@ -68,7 +68,7 @@ class FileBackupStore:
                 raw = json.load(fh)
             self._data = {k: bytes.fromhex(v) for k, v in raw.items()}
 
-    def _flush(self) -> None:
+    def _flush(self, data: Dict[str, bytes]) -> None:
         parent = os.path.dirname(self.path)
         if parent:
             os.makedirs(parent, exist_ok=True)
@@ -78,7 +78,7 @@ class FileBackupStore:
         # factory-original bytes, the one durable recovery path for an As-Built write.
         tmp = self.path + ".tmp"
         with open(tmp, "w") as fh:
-            json.dump({k: v.hex() for k, v in self._data.items()}, fh, indent=2)
+            json.dump({k: v.hex() for k, v in data.items()}, fh, indent=2)
             fh.flush()
             os.fsync(fh.fileno())
         os.replace(tmp, self.path)
@@ -87,8 +87,13 @@ class FileBackupStore:
         return key in self._data
 
     def save(self, key: str, data: bytes) -> None:
-        self._data[key] = bytes(data)
-        self._flush()
+        # Persist FIRST, commit in-memory only after a durable write — so a failed
+        # flush never leaves has()==True for a backup that isn't actually on disk
+        # (which would let write_block proceed with no real recovery path).
+        candidate = dict(self._data)
+        candidate[key] = bytes(data)
+        self._flush(candidate)
+        self._data = candidate
 
     def load(self, key: str) -> Optional[bytes]:
         return self._data.get(key)
