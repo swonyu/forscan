@@ -90,6 +90,15 @@ class ControllerTests(unittest.TestCase):
         self.assertIn("P0143", report)
         self.assertIn("Freeze frame", report)
 
+    def test_health_report_coaches_not_ready_monitors(self):
+        # The demo has a not-ready monitor; the shareable report should not just list
+        # it but tell the owner how to complete it (drive-cycle coach integrated).
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        report = c.health_report()
+        self.assertIn("To complete them", report)
+        self.assertIn("•", report)  # a guidance bullet per not-ready monitor
+
     def test_calibration(self):
         c = FordScopeController()
         c.connect(DEMO_PORT)

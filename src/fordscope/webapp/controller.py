@@ -331,6 +331,10 @@ class FordScopeController:
             )
             if rd["not_ready"]:
                 lines.append("  Monitors not complete: " + ", ".join(rd["not_ready"]))
+                lines.append("  To complete them (generic OBD-II guidance unless [Ford-verified]):")
+                for tip in drive_cycle_tips(rd["not_ready"]):
+                    tag = " [Ford-verified]" if tip.ford_verified else ""
+                    lines.append(f"    • {tip.monitor}{tag}: {tip.guidance}")
         except Exception:
             lines.append("Inspection readiness: (unavailable)")
 
