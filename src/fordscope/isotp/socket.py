@@ -141,7 +141,7 @@ class IsoTpSocket:
             frame = self._recv_matching(self.recv_timeout)
             if frame is None:
                 raise IsoTpTimeout("no flow-control frame received")
-            pci = parse_isotp(frame.data)
+            pci = self._parse(frame.data)
             if pci.type is not IsoTpFrameType.FLOW_CONTROL:
                 raise IsoTpError(f"expected flow control, got {pci.type.name}")
             if pci.flow_status == FlowStatus.OVERFLOW:
@@ -181,12 +181,22 @@ class IsoTpSocket:
                 first_after_cts = True
 
     # --- recv ------------------------------------------------------------
+    @staticmethod
+    def _parse(frame_data: bytes) -> "IsoTpPci":
+        # A malformed frame (unknown PCI nibble, truncation) is a transport-layer
+        # error, not a caller ValueError — wrap it so consumers (e.g. the whole-car
+        # scan) catch IsoTpError and skip-and-continue instead of aborting the walk.
+        try:
+            return parse_isotp(frame_data)
+        except ValueError as exc:
+            raise IsoTpError(f"malformed ISO-TP frame: {exc}") from exc
+
     def recv(self, timeout: Optional[float] = None) -> Optional[bytes]:
         timeout = self.recv_timeout if timeout is None else timeout
         frame = self._recv_matching(timeout)
         if frame is None:
             return None
-        pci = parse_isotp(frame.data)
+        pci = self._parse(frame.data)
         if pci.type is IsoTpFrameType.SINGLE:
             return pci.data
         if pci.type is IsoTpFrameType.FIRST:
@@ -203,7 +213,7 @@ class IsoTpSocket:
             frame = self._recv_matching(self.recv_timeout)
             if frame is None:
                 raise IsoTpTimeout("timed out waiting for a consecutive frame")
-            pci = parse_isotp(frame.data)
+            pci = self._parse(frame.data)
             if pci.type is not IsoTpFrameType.CONSECUTIVE:
                 raise IsoTpError(f"expected consecutive frame, got {pci.type.name}")
             if pci.sequence_number != expected_sn:

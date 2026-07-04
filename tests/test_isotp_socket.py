@@ -199,5 +199,35 @@ class FlowControlErrorTests(unittest.TestCase):
             sock.recv()
 
 
+class MalformedFrameTests(unittest.TestCase):
+    def test_recv_wraps_malformed_frame_as_isotp_error(self):
+        # A frame with an unknown PCI nibble (bus noise / cross-talk) must surface as
+        # IsoTpError, not a bare ValueError — so the whole-car scan (which catches
+        # IsoTpError) skips the glitching module and continues instead of aborting.
+        class _Garbage:
+            def __init__(self):
+                self._open = True
+
+            def open(self):
+                self._open = True
+
+            def close(self):
+                self._open = False
+
+            @property
+            def is_open(self):
+                return self._open
+
+            def send(self, frame):
+                pass
+
+            def recv(self, timeout=1.0):
+                return CanFrame(RESP_ID, bytes([0x40, 0, 0, 0, 0, 0, 0, 0]))  # PCI nibble 0x4
+
+        sock = IsoTpSocket(_Garbage(), tx_id=REQ_ID, rx_id=RESP_ID)
+        with self.assertRaises(IsoTpError):
+            sock.recv()
+
+
 if __name__ == "__main__":
     unittest.main()
