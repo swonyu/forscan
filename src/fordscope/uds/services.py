@@ -38,6 +38,17 @@ RESET_HARD = 0x01
 RESET_KEY_OFF_ON = 0x02
 RESET_SOFT = 0x03
 
+# --- InputOutputControl options (0x2F control byte) ---------------------
+IO_RETURN_CONTROL_TO_ECU = 0x00
+IO_RESET_TO_DEFAULT = 0x01
+IO_FREEZE_CURRENT_STATE = 0x02
+IO_SHORT_TERM_ADJUSTMENT = 0x03
+
+# --- RoutineControl sub-functions (0x31) --------------------------------
+ROUTINE_START = 0x01
+ROUTINE_STOP = 0x02
+ROUTINE_REQUEST_RESULTS = 0x03
+
 # --- Negative Response Codes (NRCs) -------------------------------------
 NRC_GENERAL_REJECT = 0x10
 NRC_SERVICE_NOT_SUPPORTED = 0x11

@@ -19,7 +19,12 @@ from .services import (
     ECU_RESET,
     READ_DATA_BY_IDENTIFIER,
     WRITE_DATA_BY_IDENTIFIER,
+    INPUT_OUTPUT_CONTROL_BY_IDENTIFIER,
+    ROUTINE_CONTROL,
     TESTER_PRESENT,
+    ROUTINE_START,
+    ROUTINE_STOP,
+    ROUTINE_REQUEST_RESULTS,
     nrc_name,
 )
 
@@ -131,3 +136,43 @@ class UdsClient:
     def tester_present(self, suppress_response: bool = True) -> None:
         sub = SUPPRESS_POSITIVE_RESPONSE_BIT if suppress_response else 0x00
         self.request(bytes([TESTER_PRESENT, sub]), expect_response=not suppress_response)
+
+    # --- bidirectional controls -----------------------------------------
+    # SAFETY: these command real actuators (relays, valves, motors, self-tests)
+    # on a real vehicle. Simulator-tested only here; on-car use demands safe
+    # conditions (correct session, engine state) and is NEEDS ON-CAR CHECK.
+    def io_control(self, did: int, control_option: int, control_state: bytes = b"") -> bytes:
+        """InputOutputControlByIdentifier (0x2F). Returns the control-status bytes."""
+        if not 0 <= did <= 0xFFFF:
+            raise ValueError(f"DID must be a 16-bit value, got {did}")
+        hi, lo = (did >> 8) & 0xFF, did & 0xFF
+        resp = self.request(
+            bytes([INPUT_OUTPUT_CONTROL_BY_IDENTIFIER, hi, lo, control_option & 0xFF])
+            + bytes(control_state)
+        )
+        assert resp is not None
+        if len(resp) < 4 or resp[1] != hi or resp[2] != lo:
+            raise UnexpectedResponseError("IOControl echo mismatch")
+        return resp[4:]
+
+    def routine_control(self, routine_type: int, routine_id: int, data: bytes = b"") -> bytes:
+        """RoutineControl (0x31). Returns the routine status/results record."""
+        if not 0 <= routine_id <= 0xFFFF:
+            raise ValueError(f"routine id must be a 16-bit value, got {routine_id}")
+        hi, lo = (routine_id >> 8) & 0xFF, routine_id & 0xFF
+        resp = self.request(
+            bytes([ROUTINE_CONTROL, routine_type & 0xFF, hi, lo]) + bytes(data)
+        )
+        assert resp is not None
+        if len(resp) < 4 or resp[1] != (routine_type & 0xFF) or resp[2] != hi or resp[3] != lo:
+            raise UnexpectedResponseError("RoutineControl echo mismatch")
+        return resp[4:]
+
+    def start_routine(self, routine_id: int, data: bytes = b"") -> bytes:
+        return self.routine_control(ROUTINE_START, routine_id, data)
+
+    def stop_routine(self, routine_id: int, data: bytes = b"") -> bytes:
+        return self.routine_control(ROUTINE_STOP, routine_id, data)
+
+    def request_routine_results(self, routine_id: int) -> bytes:
+        return self.routine_control(ROUTINE_REQUEST_RESULTS, routine_id)

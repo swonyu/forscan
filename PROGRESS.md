@@ -28,7 +28,8 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
       (0x18DA{TA}{SA}/0x18DAF1{TA}, 0x18DB33F1). Math authoritative; module address map caveated.
 - [x] 2.2 ReadDataByIdentifier across modules — whole-car walk (`services/module_scan.py`):
       connect per module, read identification DIDs, present/absent detection, text report
-- [ ] 3.1 Bidirectional: IOControl (0x2F) + RoutineControl (0x31) scaffolding
+- [x] 3.1 Bidirectional: IOControl (0x2F) + RoutineControl (0x31) — start/stop/results, sequence
+      checking. SAFETY: actuates real hardware; simulator-tested only, on-car use is NEEDS ON-CAR CHECK
 - [ ] 3.2 Whole-car scan → health report
 - [ ] 3.3 CLI + live dashboard + CSV/SQLite logging
 
@@ -100,3 +101,8 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   renders it. Added reusable `isotp.multiplex` to host many ECUs on one simulated bus. +4 tests:
   present w/ identifiers, absent detection, present-but-no-DIDs, report format (118 total,
   `Ran 118 tests … OK`). Next: bidirectional actuator tests (3.1).
+- **Iter 9** — Bidirectional controls on `UdsClient` + `SimulatedUdsEcu`: `io_control` (0x2F,
+  return-control / short-term-adjustment) and `routine_control`/`start`/`stop`/`request_results`
+  (0x31, with requestSequenceError when results requested before start). SAFETY caveat in
+  docstrings — these actuate hardware; simulator-tested only, on-car use is NEEDS ON-CAR CHECK.
+  +7 tests (125 total, `Ran 125 tests … OK`). Next: whole-car DTC report (3.2), then CLI (3.3).

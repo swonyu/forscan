@@ -21,22 +21,40 @@ from .services import (
     ECU_RESET,
     READ_DATA_BY_IDENTIFIER,
     WRITE_DATA_BY_IDENTIFIER,
+    INPUT_OUTPUT_CONTROL_BY_IDENTIFIER,
+    ROUTINE_CONTROL,
     TESTER_PRESENT,
     SESSION_DEFAULT,
     SESSION_PROGRAMMING,
     SESSION_EXTENDED,
+    IO_RETURN_CONTROL_TO_ECU,
+    ROUTINE_START,
+    ROUTINE_STOP,
+    ROUTINE_REQUEST_RESULTS,
     NRC_SERVICE_NOT_SUPPORTED,
     NRC_SUBFUNCTION_NOT_SUPPORTED,
     NRC_INCORRECT_LENGTH_OR_FORMAT,
     NRC_REQUEST_OUT_OF_RANGE,
+    NRC_REQUEST_SEQUENCE_ERROR,
 )
 
 
 class SimulatedUdsEcu:
-    def __init__(self, dids: "Optional[Dict[int, bytes]]" = None) -> None:
+    def __init__(
+        self,
+        dids: "Optional[Dict[int, bytes]]" = None,
+        *,
+        io_dids: "Optional[set]" = None,
+        routines: "Optional[Dict[int, bytes]]" = None,
+    ) -> None:
         self.dids: Dict[int, bytes] = {int(k): bytes(v) for k, v in (dids or {}).items()}
         self.session: int = SESSION_DEFAULT
         self.last_reset: Optional[int] = None
+        # bidirectional-control state
+        self.io_dids = set(io_dids or ())
+        self.io_state: Dict[int, bytes] = {}
+        self.routines: Dict[int, bytes] = {int(k): bytes(v) for k, v in (routines or {}).items()}
+        self.routines_started: set = set()
 
     def __call__(self, request: bytes) -> Optional[bytes]:
         if not request:
@@ -47,6 +65,8 @@ class SimulatedUdsEcu:
             ECU_RESET: self._ecu_reset,
             READ_DATA_BY_IDENTIFIER: self._read_did,
             WRITE_DATA_BY_IDENTIFIER: self._write_did,
+            INPUT_OUTPUT_CONTROL_BY_IDENTIFIER: self._io_control,
+            ROUTINE_CONTROL: self._routine_control,
             TESTER_PRESENT: self._tester_present,
         }.get(sid)
         if handler is None:
@@ -98,3 +118,40 @@ class SimulatedUdsEcu:
         if request[1] & SUPPRESS_POSITIVE_RESPONSE_BIT:
             return None  # suppressed — ECU stays silent
         return bytes([self._positive(TESTER_PRESENT), request[1] & 0x7F])
+
+    def _io_control(self, request: bytes) -> Optional[bytes]:
+        # [0x2F, hi, lo, option, *state]
+        if len(request) < 4:
+            return self._nrc(INPUT_OUTPUT_CONTROL_BY_IDENTIFIER, NRC_INCORRECT_LENGTH_OR_FORMAT)
+        did = (request[1] << 8) | request[2]
+        option = request[3]
+        state = bytes(request[4:])
+        if did not in self.io_dids:
+            return self._nrc(INPUT_OUTPUT_CONTROL_BY_IDENTIFIER, NRC_REQUEST_OUT_OF_RANGE)
+        if option == IO_RETURN_CONTROL_TO_ECU:
+            self.io_state.pop(did, None)
+        else:
+            self.io_state[did] = state
+        # echo did + option + the commanded state as the control status record
+        return bytes([self._positive(INPUT_OUTPUT_CONTROL_BY_IDENTIFIER), request[1], request[2], option]) + state
+
+    def _routine_control(self, request: bytes) -> Optional[bytes]:
+        # [0x31, type, rid_hi, rid_lo, *option]
+        if len(request) < 4:
+            return self._nrc(ROUTINE_CONTROL, NRC_INCORRECT_LENGTH_OR_FORMAT)
+        rtype = request[1]
+        rid = (request[2] << 8) | request[3]
+        if rid not in self.routines:
+            return self._nrc(ROUTINE_CONTROL, NRC_REQUEST_OUT_OF_RANGE)
+        head = bytes([self._positive(ROUTINE_CONTROL), rtype, request[2], request[3]])
+        if rtype == ROUTINE_START:
+            self.routines_started.add(rid)
+            return head
+        if rtype == ROUTINE_STOP:
+            self.routines_started.discard(rid)
+            return head
+        if rtype == ROUTINE_REQUEST_RESULTS:
+            if rid not in self.routines_started:
+                return self._nrc(ROUTINE_CONTROL, NRC_REQUEST_SEQUENCE_ERROR)
+            return head + self.routines[rid]
+        return self._nrc(ROUTINE_CONTROL, NRC_SUBFUNCTION_NOT_SUPPORTED)
