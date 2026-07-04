@@ -11,9 +11,9 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
 
 ## Phase 1 — Diagnostics foundation (Tiers 0–3)
 - [x] 0.1 Transport abstraction: `CanFrame` + `Transport` ABC + `SimulatorTransport`
-- [~] 0.2 Real backends behind the same ABC — `SlcanTransport` (`transport/slcan.py`): wire
-      codec (encode/parse, Ford 500k/125k bitrates) + command sequencing fully tested over an
-      injected port. Real serial-port timing/quirks still [NEEDS ON-CAR CHECK]; Openport backend TODO.
+- [~] 0.2 Real backends behind the same ABC — TWO built, codecs fully tested over injected ports;
+      live serial [NEEDS ON-CAR CHECK]: `SlcanTransport` (CANable-class raw CAN) + `Elm327Transport`
+      (OBDLink EX / ELM327 AT-command). Openport (J2534-on-Mac) backend still TODO.
 - [x] 1.1a ISO-TP frame codec: SF/FF/CF/FC encode + parse (pure, hand-derived fixtures)
 - [x] 1.1b ISO-TP transport layer: `IsoTpSocket` send/recv + flow control; `SimulatedIsoTpEcu`
       (reusable simulated endpoint). BS=0 both ways; client send honours ECU block-size>0.
@@ -155,3 +155,10 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   FakeSerial (codec round-trip, command sequencing, status-line skipping). Real serial timing
   still NEEDS ON-CAR CHECK. This is the bridge to a real ~$30 CANable adapter. (190 total,
   `Ran 190 tests … OK`). Next: wire `--backend slcan` in the CLI (still refusing until on-car).
+- **Iter 16** — ELM327/STN backend (`transport/elm327.py`) so the OBDLink EX (the recommended
+  adapter) works with FordScope, not just FORScan. Pure: `parse_response_line` (headers-on
+  11-bit/29-bit lines, status/prompt filtering), `header_command`/`payload_line`/`protocol_command`.
+  `Elm327Transport` over a duck-typed port: ATZ/ATE0/ATH1/ATCAF0/ATSP init, ATSH-on-header-change,
+  read-until-`>` recv. +14 tests over a FakeSerial. Live device timing / 29-bit / multi-frame FC
+  in raw mode = NEEDS ON-CAR CHECK. One fixture bug self-caught: a 7-byte "8-byte" frame line —
+  fixed the fixture, not the assertion (204 total, `Ran 204 tests … OK`).

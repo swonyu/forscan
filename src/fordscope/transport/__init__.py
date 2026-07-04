@@ -21,6 +21,13 @@ from .slcan import (
     parse_frame,
     bitrate_command,
 )
+from .elm327 import (
+    Elm327Transport,
+    header_command,
+    payload_line,
+    parse_response_line,
+    protocol_command,
+)
 
 __all__ = [
     "CanFrame",
@@ -38,4 +45,9 @@ __all__ = [
     "encode_frame",
     "parse_frame",
     "bitrate_command",
+    "Elm327Transport",
+    "header_command",
+    "payload_line",
+    "parse_response_line",
+    "protocol_command",
 ]
