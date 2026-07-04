@@ -497,5 +497,20 @@ class ConcurrencyTests(unittest.TestCase):
         self.assertEqual(captured["pair"], ("scan-data", "LIVE-MARKER"))
 
 
+class RunEntryPointTests(unittest.TestCase):
+    def test_run_closes_socket_on_keyboard_interrupt(self):
+        # run() must release the listening socket on Ctrl-C (shutdown() alone leaks
+        # the fd — only server_close() releases it).
+        from unittest import mock
+        from fordscope.webapp import server as srv
+
+        fake = mock.MagicMock()
+        fake.serve_forever.side_effect = KeyboardInterrupt
+        fake.server_address = ("127.0.0.1", 8737)
+        with mock.patch.object(srv, "create_server", return_value=fake):
+            srv.run(open_browser=False)
+        fake.server_close.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()

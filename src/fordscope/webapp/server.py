@@ -269,3 +269,7 @@ def run(host="127.0.0.1", port=8737, open_browser=True) -> None:
         server.serve_forever()
     except KeyboardInterrupt:
         server.shutdown()
+    finally:
+        # shutdown() stops the serve loop but does NOT release the listening socket;
+        # server_close() does. Without it, each run/Ctrl-C cycle leaks one fd.
+        server.server_close()
