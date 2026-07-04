@@ -965,6 +965,15 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   zero failed network requests**. The native-macOS-GUI deliverable (Phase 4) is confirmed working
   end-to-end after all recent changes, not just piece-by-piece. Verification only, no code change;
   442 green. (Transient launch.json created for the run, removed after.)
+- **Iter 124** (GUI launch robustness — clean message on a port conflict) — Fresh Phase-4 angle: `run()`
+  binds a fixed port 8737, so launching a SECOND instance (or double-clicking the future `.app` twice)
+  hit a raw `OSError: [Errno 48] Address already in use` traceback — the first thing a user would see.
+  Verified the raw crash empirically, wrote the RED test (`run()` on a busy port raised), then wrapped
+  `create_server` in `run()` to catch the bind failure and print a clear, actionable message
+  (`FordScope could not start on … It may already be running — open http://…/ or close the other
+  instance`) and return cleanly. Added `import sys`. **Verified BY RUNNING** the real entry point
+  (`python -m fordscope.webapp`) on a held port: exit 0, no traceback, the clean message on stderr.
+  Existing keyboard-interrupt test unaffected (the wrap only catches OSError). +1 test → **443 green**.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the

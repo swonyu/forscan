@@ -8,6 +8,7 @@ a browser. Real-adapter connection over USB is NEEDS ON-CAR CHECK — the demo
 from __future__ import annotations
 
 import json
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
@@ -307,7 +308,20 @@ def create_server(controller=None, host="127.0.0.1", port=0) -> ThreadingHTTPSer
 
 
 def run(host="127.0.0.1", port=8737, open_browser=True) -> None:
-    server = create_server(host=host, port=port)
+    try:
+        server = create_server(host=host, port=port)
+    except OSError as exc:
+        # Port already bound -> almost always a second FordScope instance (or the app
+        # double-clicked twice). Give a clear, actionable message and exit cleanly rather
+        # than dumping an "Address already in use" traceback -- this is the first thing a
+        # user sees when they launch the app while one is already running.
+        print(
+            f"FordScope could not start on {host}:{port} ({exc.strerror or exc}).\n"
+            f"It may already be running — open http://{host}:{port}/ in your browser, "
+            f"or close the other instance and try again.",
+            file=sys.stderr,
+        )
+        return
     url = f"http://{host}:{server.server_address[1]}/"
     print(f"FordScope web app running at {url}  (Ctrl-C to stop)")
     if open_browser:

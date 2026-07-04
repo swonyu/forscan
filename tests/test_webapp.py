@@ -697,6 +697,27 @@ class RunEntryPointTests(unittest.TestCase):
         fake.server_close.assert_called_once()
         self.assertIn("http://127.0.0.1:8737/", out.getvalue())
 
+    def test_run_reports_port_conflict_cleanly_not_a_traceback(self):
+        # If the port is already bound (a second FordScope instance, or the app
+        # double-clicked twice), run() must print a clear, actionable message and return
+        # cleanly -- NOT dump an "Address already in use" traceback, which is the first
+        # thing a user would see. Bind a free port, then run() on it to force the conflict.
+        import io
+        from contextlib import redirect_stderr
+        from fordscope.webapp import server as srv
+
+        blocker = srv.create_server(port=0)          # OS picks a free port
+        taken = blocker.server_address[1]
+        try:
+            err = io.StringIO()
+            with redirect_stderr(err):
+                srv.run(port=taken, open_browser=False)  # conflict -> must NOT raise
+            msg = err.getvalue()
+            self.assertIn("already be running", msg)
+            self.assertIn(str(taken), msg)
+        finally:
+            blocker.server_close()
+
 
 if __name__ == "__main__":
     unittest.main()
