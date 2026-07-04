@@ -15,7 +15,14 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .base import CanFrame, Transport, TransportNotOpen, CAN_MAX_CLASSIC_DLC
+from .base import (
+    CanFrame,
+    Transport,
+    TransportNotOpen,
+    CAN_MAX_CLASSIC_DLC,
+    CAN_MAX_11BIT_ID,
+    CAN_MAX_29BIT_ID,
+)
 
 OPEN_COMMAND = b"O\r"
 CLOSE_COMMAND = b"C\r"
@@ -74,6 +81,8 @@ def parse_frame(line) -> Optional[CanFrame]:
         return None
     if dlc > CAN_MAX_CLASSIC_DLC:
         return None  # malformed: exceeds classic-CAN 8-byte max — skip, don't crash
+    if arb > (CAN_MAX_29BIT_ID if extended else CAN_MAX_11BIT_ID):
+        return None  # malformed: ID exceeds the 11-/29-bit range — skip, don't crash
     data_hex = rest[: 2 * dlc]
     if len(data_hex) < 2 * dlc:
         return None

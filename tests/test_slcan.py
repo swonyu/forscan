@@ -73,6 +73,15 @@ class ParseTests(unittest.TestCase):
         # return None (so recv can skip it), NOT raise out of the receive loop.
         self.assertIsNone(parse_frame(b"t7DF9010203040506070809"))
 
+    def test_out_of_range_11bit_id_returns_none_not_crash(self):
+        # A 't' line whose 3-hex ID exceeds the 11-bit max (0x7FF) is malformed;
+        # it must be skipped (None), not raised out of the receive loop.
+        self.assertIsNone(parse_frame(b"tFFF3010203"))
+
+    def test_out_of_range_29bit_id_returns_none_not_crash(self):
+        # A 'T' line whose 8-hex ID exceeds the 29-bit max (0x1FFFFFFF).
+        self.assertIsNone(parse_frame(b"TFFFFFFFF3010203"))
+
     def test_roundtrip(self):
         for f in (
             CanFrame(0x7DF, bytes([0x02, 0x01, 0x0C])),

@@ -359,3 +359,16 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   live backends (marked UNVALIDATED), and a prominent honesty-boundaries section (no on-car
   validation, no emissions/immobilizer, SecurityAccess key not shipped, reflash protocol-only /
   not CLI-exposed, As-Built examples UNVERIFIED). Docs only; suite unchanged at 260 green.
+- **Iter 46** — Adversarial review pass (4 auditors, one per subsystem) → **1 real bug family
+  found & fixed test-first** (336 total green). The `slcan` and `elm327` ASCII parsers
+  range-checked DLC but **not the arbitration ID**, so a lexically-valid-but-out-of-range ID
+  (11-bit >0x7FF, 29-bit >0x1FFFFFFF) made the frozen `CanFrame` raise `ValueError` that
+  escaped `recv()` and killed the receive loop — violating the parsers' documented
+  skip-not-crash contract (same bug *class* as the iter-26 DLC crashes, a different unchecked
+  field). Fixed: explicit ID-range guard mirroring the DLC guard in both parsers; +4 tests
+  (11-/29-bit, both parsers), each reproduced RED first. The other two auditor-clean subsystems
+  (UDS/OBD clients; PID/DTC/checksum/addressing math) verified by independent spec
+  re-derivation — no bugs. Also: authored `docs/ROADMAP.md` (honest feature backlog) and the
+  `fordscope-code-review` skill (codifies this review technique). Web-layer findings (read-PID
+  500, connect empty-body message, log negative-samples, live-poll transport concurrency)
+  queued for iter 47.

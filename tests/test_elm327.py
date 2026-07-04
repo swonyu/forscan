@@ -73,6 +73,15 @@ class ParseResponseTests(unittest.TestCase):
         # not raise out of the receive loop.
         self.assertIsNone(parse_response_line("7E8 06 41 00 00 00 00 00 00 00 00"))
 
+    def test_out_of_range_11bit_id_returns_none_not_crash(self):
+        # A header token above the 11-bit max (0x7FF) is malformed; skip (None),
+        # don't raise out of the receive loop.
+        self.assertIsNone(parse_response_line("FFF 41 0C 0F A0"))
+
+    def test_out_of_range_29bit_id_returns_none_not_crash(self):
+        # A 29-bit header above 0x1FFFFFFF must be skipped, not crash.
+        self.assertIsNone(parse_response_line("FF FF FF FF 06 62 F1 90", is_extended=True))
+
 
 class TransportTests(unittest.TestCase):
     def test_is_a_transport(self):

@@ -17,7 +17,14 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from .base import CanFrame, Transport, TransportNotOpen, CAN_MAX_CLASSIC_DLC
+from .base import (
+    CanFrame,
+    Transport,
+    TransportNotOpen,
+    CAN_MAX_CLASSIC_DLC,
+    CAN_MAX_11BIT_ID,
+    CAN_MAX_29BIT_ID,
+)
 
 _PROMPT = 0x3E  # '>'
 
@@ -72,6 +79,8 @@ def parse_response_line(line, *, is_extended: bool = False) -> Optional[CanFrame
         return None
     if len(data) > CAN_MAX_CLASSIC_DLC:
         return None  # malformed: more than 8 data bytes — skip, don't crash
+    if arb > (CAN_MAX_29BIT_ID if is_extended else CAN_MAX_11BIT_ID):
+        return None  # malformed: header exceeds the 11-/29-bit range — skip, don't crash
     return CanFrame(arb, data, is_extended=is_extended)
 
 
