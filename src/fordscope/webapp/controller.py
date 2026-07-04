@@ -65,6 +65,7 @@ class FordScopeController:
         self.modules = None
         self.banner: Optional[str] = None
         self._lock = threading.RLock()
+        self._live_stats: dict = {}  # pid -> running min/max/sum/count over the session
 
     @property
     def connected(self) -> bool:
@@ -96,6 +97,7 @@ class FordScopeController:
         self.transport = None
         self.modules = None
         self.banner = None
+        self._live_stats = {}  # a fresh connection starts a fresh session
 
     def _require(self) -> None:
         if not self.connected:
@@ -143,9 +145,43 @@ class FordScopeController:
             try:
                 r = obd.current_data(pid)
                 rows.append({"pid": pid, "name": r.name, "value": r.value, "unit": r.unit})
+                self._accumulate(pid, r)
             except (ObdError, KeyError, ValueError):
                 rows.append({"pid": pid, "name": f"PID {pid:02X}", "value": None, "unit": ""})
         return rows
+
+    def _accumulate(self, pid: int, r) -> None:
+        """Fold one live reading into the session's running stats (numeric only;
+        bool is excluded even though it's an int subclass)."""
+        value = r.value
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            return
+        s = self._live_stats.get(pid)
+        if s is None:
+            self._live_stats[pid] = {
+                "name": r.name, "unit": r.unit,
+                "min": value, "max": value, "sum": float(value), "count": 1,
+            }
+        else:
+            s["min"] = min(s["min"], value)
+            s["max"] = max(s["max"], value)
+            s["sum"] += value
+            s["count"] += 1
+
+    @_synchronized
+    def live_stats(self) -> list:
+        """Per-PID min / max / avg accumulated over this session's live polling —
+        catches intermittent faults a single snapshot misses. Empty until live()
+        has run; reset on (re)connect."""
+        self._require()
+        return [
+            {
+                "pid": pid, "name": s["name"], "unit": s["unit"],
+                "min": s["min"], "max": s["max"],
+                "avg": s["sum"] / s["count"], "count": s["count"],
+            }
+            for pid, s in self._live_stats.items()
+        ]
 
     @_synchronized
     def vin(self) -> str:
@@ -236,6 +272,18 @@ class FordScopeController:
                 lines.append("Freeze frame: none stored")
         except Exception:
             lines.append("Freeze frame: (unavailable)")
+
+        try:
+            stats = self.live_stats()
+            if stats:
+                lines.append("")
+                lines.append("Live session (min/max/avg over the polled sample):")
+                lines += [
+                    f"  {s['name']}: {s['min']}–{s['max']}, avg {s['avg']:.1f} {s['unit']} (n={s['count']})"
+                    for s in stats
+                ]
+        except Exception:
+            pass  # no live session captured — omit the section
 
         return "\n".join(lines)
 

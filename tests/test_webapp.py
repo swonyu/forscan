@@ -104,6 +104,38 @@ class ControllerTests(unittest.TestCase):
         self.assertIn("Calibration", report)
         self.assertIn("DEMO-PCM-CAL-01", report)
 
+    def test_live_stats_tracks_min_max_avg(self):
+        # Deterministic aggregation math over a varying sequence.
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        for v in (10, 30, 20):
+            c._accumulate(0x0C, SimpleNamespace(name="Engine RPM", value=v, unit="rpm"))
+        s = {row["pid"]: row for row in c.live_stats()}[0x0C]
+        self.assertEqual((s["min"], s["max"], s["avg"], s["count"]), (10, 30, 20.0, 3))
+
+    def test_live_updates_session_stats(self):
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        c.live([0x0C, 0x05])
+        c.live([0x0C, 0x05])
+        s = {row["pid"]: row for row in c.live_stats()}
+        self.assertEqual(s[0x0C]["count"], 2)
+        self.assertEqual(s[0x0C]["avg"], 1000.0)  # demo RPM fixed at 1000
+
+    def test_reconnect_resets_session_stats(self):
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        c.live([0x0C])
+        c.connect(DEMO_PORT)  # a fresh connection starts a fresh session
+        self.assertEqual(c.live_stats(), [])
+
+    def test_health_report_includes_live_stats_after_session(self):
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        c.live([0x0C])
+        c.live([0x0C])
+        self.assertIn("Live session", c.health_report())
+
     def test_readiness(self):
         c = FordScopeController()
         c.connect(DEMO_PORT)
@@ -283,6 +315,16 @@ class ServerTests(unittest.TestCase):
 
     def test_calibration_before_connect_returns_409(self):
         status, _raw = self._req("GET", "/api/calibration")
+        self.assertEqual(status, 409)
+
+    def test_live_stats_endpoint(self):
+        self._json("POST", "/api/connect", {"port": DEMO_PORT})
+        self._json("GET", "/api/live?pids=0C,05")
+        _s, j = self._json("GET", "/api/live-stats")
+        self.assertIn(0x0C, {s["pid"] for s in j["stats"]})
+
+    def test_live_stats_before_connect_returns_409(self):
+        status, _raw = self._req("GET", "/api/live-stats")
         self.assertEqual(status, 409)
 
     def test_report_endpoint(self):

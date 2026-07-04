@@ -195,6 +195,8 @@ def _make_handler(controller: FordScopeController):
                     return self._json({**controller.readiness(), "banner": controller.banner})
                 if u.path == "/api/calibration":
                     return self._json({**controller.calibration(), "banner": controller.banner})
+                if u.path == "/api/live-stats":
+                    return self._json({"stats": controller.live_stats(), "banner": controller.banner})
                 if u.path == "/api/report":
                     return self._json({"report": controller.health_report(), "banner": controller.banner})
                 if u.path == "/api/report.txt":

@@ -80,7 +80,9 @@ feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and 
       Engine (iter 49): `ObdClient.read_calibration_ids`/`read_cvns`/`read_ecu_names`
       (InfoType 0x04/0x06/0x0A). Surfaced (iter 50): `controller.calibration()`, a Calibration
       line in the health report, `GET /api/calibration`, demo-seeded. Real read [NEEDS ON-CAR CHECK].
-- [ ] R2 Session min/max/avg per live PID (surfaced in the dashboard + health report)
+- [x] R2 Session min/max/avg per live PID (iter 51): controller accumulates per-PID running
+      min/max/sum/count on each `live()` poll (numeric only), reset on (re)connect;
+      `live_stats()` + `GET /api/live-stats` + a "Live session" block in the health report.
 - [ ] R3 Readiness / drive-cycle coach — generic OBD conditions to complete each not-ready monitor
 - [ ] R6 DTC state separation (confirmed / pending / permanent) with a one-line meaning
 - [ ] R4 Live PID graphing (inline SVG sparklines) in the web UI
@@ -423,3 +425,10 @@ feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and 
   `GET /api/calibration`. Demo PCM seeded with an obviously-fake `DEMO-PCM-CAL-01` / CVN
   1A2B3C4D so it's demonstrable end-to-end. +4 tests (controller, health-report, endpoint,
   before-connect 409), RED-first. 352 green. **R1 complete** (engine + all surfaces).
+- **Iter 51** — R2: session min/max/avg per live PID. The controller folds each `live()` poll
+  into a per-PID running {min,max,sum,count} (numeric values only — bool excluded despite being
+  an int subclass), reset on (re)connect so each session is clean. `live_stats()` returns
+  min/max/avg/count; `GET /api/live-stats`; the health report gains a "Live session (min/max/avg)"
+  block when a session has been polled. Catches intermittent faults a single snapshot misses.
+  +6 tests (aggregation math over a varying sequence, live-updates-count, reset-on-reconnect,
+  report block, endpoint, before-connect 409), RED-first. 358 green.
