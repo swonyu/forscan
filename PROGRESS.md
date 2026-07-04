@@ -829,6 +829,17 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   frames come UP through elm327 recv. Both verified empirically first. No hardware. +2 tests →
   **429 green**. (The elm327 *live timing/handshake* is still NEEDS ON-CAR CHECK; this proves the
   codec composition, not the physical device.)
+- **Iter 110** (slcan real-adapter composition — coverage parity with elm327) — Completed the
+  integration-coverage sweep: the OTHER shipped real backend, `SlcanTransport` (CANable, `--backend
+  slcan`), had the same untested-composition gap iter 109 closed for elm327. Added
+  `SlcanEndToEndReadTests` (mirror of the elm327 pair) with a `ScriptedSlcanPort` fake CANable driving
+  a real `SlcanTransport → IsoTpSocket → ObdClient` stack: SF Mode-01 PID 0C → RPM 1000.0, and the
+  MULTIFRAME VIN → `1FMHK8D89ABA12345` (flow-control down + consecutive frames up through slcan). Both
+  verified empirically first — which CAUGHT MY OWN FIXTURE BUG: I'd hand-written the multiframe slcan
+  lines with the wrong DLC nibble (`t7E81…` dlc 1 vs `t7E88…` dlc 8; slcan concatenates id+dlc with no
+  separator), and the empirical run surfaced it as an ISO-TP "SF truncated" before any test was
+  written. Fixed the fixtures, re-verified, then committed. +2 tests → **431 green**. Both real
+  backends now have full-stack composition coverage; slcan live timing remains NEEDS ON-CAR CHECK.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the

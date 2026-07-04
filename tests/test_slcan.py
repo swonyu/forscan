@@ -14,6 +14,35 @@ from fordscope.transport import (
     parse_frame,
     bitrate_command,
 )
+from fordscope.isotp import IsoTpSocket
+from fordscope.obd import ObdClient
+
+
+class ScriptedSlcanPort:
+    """A fake CANable adapter for END-TO-END reads: S/O/C setup commands are silent,
+    and after each CAN frame (``t``/``T``) is written it emits the next queued slcan
+    response block (LAWICEL line format). Drives a real SlcanTransport -> IsoTpSocket
+    -> ObdClient stack with no hardware. A ``\\r``-joined block models the adapter
+    returning several frames (e.g. consecutive frames) in one read."""
+
+    def __init__(self, response_blocks) -> None:
+        self._blocks = list(response_blocks)
+        self._armed = None
+
+    def write(self, data: bytes) -> int:
+        text = bytes(data).decode("ascii", "ignore").strip()
+        if text and text[0] in "tTrR" and self._blocks:  # a CAN frame, not an S/O/C cmd
+            self._armed = self._blocks.pop(0)
+        return len(data)
+
+    def read(self, size: int = 1) -> bytes:
+        if self._armed is not None:
+            block, self._armed = self._armed, None
+            return (block + "\r").encode("ascii")
+        return b""
+
+    def close(self) -> None:
+        pass
 
 
 class FakeSerial:
@@ -195,6 +224,34 @@ class TransportTests(unittest.TestCase):
         frame = t.recv()
         self.assertIsNotNone(frame)
         self.assertEqual(frame.arbitration_id, 0x7E8)
+
+
+class SlcanEndToEndReadTests(unittest.TestCase):
+    """The slcan (CANable) real-adapter path proven as an INTEGRATED read: scripted
+    slcan lines -> SlcanTransport parse -> IsoTpSocket reassembly -> ObdClient decode
+    -> a correct value. Mirrors the elm327 end-to-end tests so BOTH shipped real
+    backends have their full-stack composition covered, not just per-layer units."""
+
+    def _obd(self, response_blocks):
+        t = SlcanTransport(ScriptedSlcanPort(response_blocks))
+        t.open()
+        return ObdClient(IsoTpSocket(t, tx_id=0x7E0, rx_id=0x7E8))
+
+    def test_single_frame_read_rpm_end_to_end(self):
+        # SF reply to Mode 01 PID 0C: id 7E8, dlc 8, [04 41 0C 0F A0 00 00 00].
+        obd = self._obd(["t7E8804410C0FA0000000"])
+        r = obd.current_data(0x0C)
+        self.assertEqual((r.name, r.value, r.unit), ("Engine RPM", 1000.0, "rpm"))
+
+    def test_multiframe_vin_read_end_to_end(self):
+        # Multiframe VIN: the client's flow-control frame goes DOWN through slcan send
+        # and the consecutive frames come UP through slcan recv. FF (49 02 01 '1F M')
+        # then CF1 'HK8D89A' + CF2 'BA12345'. All frames dlc 8.
+        obd = self._obd([
+            "t7E88101449020131464D",
+            "t7E8821484B3844383941\rt7E882242413132333435",
+        ])
+        self.assertEqual(obd.read_vin(), "1FMHK8D89ABA12345")
 
 
 if __name__ == "__main__":
