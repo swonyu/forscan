@@ -65,6 +65,8 @@ def build_demo_vehicle() -> Tuple[SimulatorTransport, List[AddressPair]]:
                     0x01: bytes([0x81, 0x07, 0x21, 0x20]),
                 },
                 dtcs=["P0143"],
+                pending=["P0113"],      # detected this cycle, not yet confirmed
+                permanent=["P0420"],    # confirmed; won't clear until the ECU re-verifies
                 vin=DEMO_VIN,
                 # obviously-fake demo calibration (Mode 09 0x04/0x06) so the
                 # calibration readout is demonstrable end-to-end on the simulator

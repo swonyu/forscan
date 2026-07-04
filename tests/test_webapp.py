@@ -136,6 +136,19 @@ class ControllerTests(unittest.TestCase):
         c.live([0x0C])
         self.assertIn("Live session", c.health_report())
 
+    def test_dtc_states_splits_by_state(self):
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        st = c.dtc_states()
+        self.assertIn("P0143", [d["code"] for d in st["confirmed"]["codes"]])
+        self.assertIn("P0113", [d["code"] for d in st["pending"]["codes"]])
+        self.assertIn("P0420", [d["code"] for d in st["permanent"]["codes"]])
+        self.assertIn("won't", st["permanent"]["meaning"].lower())  # plain-language meaning
+
+    def test_dtc_states_before_connect_raises(self):
+        with self.assertRaises(NotConnectedError):
+            FordScopeController().dtc_states()
+
     def test_readiness(self):
         c = FordScopeController()
         c.connect(DEMO_PORT)
@@ -325,6 +338,16 @@ class ServerTests(unittest.TestCase):
 
     def test_live_stats_before_connect_returns_409(self):
         status, _raw = self._req("GET", "/api/live-stats")
+        self.assertEqual(status, 409)
+
+    def test_dtc_states_endpoint(self):
+        self._json("POST", "/api/connect", {"port": DEMO_PORT})
+        _s, j = self._json("GET", "/api/dtc-states")
+        self.assertIn("P0143", [d["code"] for d in j["confirmed"]["codes"]])
+        self.assertIn("P0420", [d["code"] for d in j["permanent"]["codes"]])
+
+    def test_dtc_states_before_connect_returns_409(self):
+        status, _raw = self._req("GET", "/api/dtc-states")
         self.assertEqual(status, 409)
 
     def test_report_endpoint(self):

@@ -84,7 +84,10 @@ feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and 
       min/max/sum/count on each `live()` poll (numeric only), reset on (re)connect;
       `live_stats()` + `GET /api/live-stats` + a "Live session" block in the health report.
 - [ ] R3 Readiness / drive-cycle coach — generic OBD conditions to complete each not-ready monitor
-- [ ] R6 DTC state separation (confirmed / pending / permanent) with a one-line meaning
+- [x] R6 DTC state separation (iter 52): `controller.dtc_states()` reads Mode 03/07/0A and
+      returns confirmed/pending/permanent groups, each with a plain-language meaning + described
+      codes; `GET /api/dtc-states`. The emissions/inspection view (distinct from the UDS per-module
+      `dtc()` scan) — surfaces the pending-vs-permanent distinction that explains "why codes come back."
 - [ ] R4 Live PID graphing (inline SVG sparklines) in the web UI
 - [ ] R5 Mode 06 on-board monitoring test results (generic decode; TID meanings OEM — not invented)
 
@@ -432,3 +435,10 @@ feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and 
   block when a session has been polled. Catches intermittent faults a single snapshot misses.
   +6 tests (aggregation math over a varying sequence, live-updates-count, reset-on-reconnect,
   report block, endpoint, before-connect 409), RED-first. 358 green.
+- **Iter 52** — R6: DTC state separation. `controller.dtc_states()` reads generic OBD Mode 03
+  (confirmed), 07 (pending), 0A (permanent) and returns three groups, each with a plain-language
+  meaning + described codes (via the DTC DB); `GET /api/dtc-states`. This is the emissions/
+  inspection lens — distinct from the UDS per-module `dtc()` scan — and surfaces the
+  pending-vs-permanent distinction (why a permanent code won't clear on a scan-tool wipe). Demo
+  PCM seeded with pending P0113 + permanent P0420 for end-to-end demonstration. +4 tests
+  (split-by-state + meaning, before-connect raise, endpoint, 409), RED-first. 362 green.

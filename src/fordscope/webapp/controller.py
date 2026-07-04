@@ -117,6 +117,38 @@ class FordScopeController:
         return format_dtc_report(scan_vehicle_dtcs(self.transport, self.modules))
 
     @_synchronized
+    def dtc_states(self) -> dict:
+        """Generic OBD DTCs split by state — confirmed (Mode 03), pending (07),
+        permanent (0A) — each with a plain-language meaning. This is the
+        emissions/inspection view (distinct from the UDS per-module `dtc()` scan);
+        the pending-vs-permanent split is what tells an owner whether a code will
+        self-clear or won't clear until the fault is actually fixed."""
+        self._require()
+        obd = self._obd()
+
+        def _read(mode: int) -> list:
+            try:
+                return [{"code": d.code, "definition": d.summary}
+                        for d in obd.read_dtcs_described(mode)]
+            except (ObdError, KeyError, ValueError):
+                return []
+
+        return {
+            "confirmed": {
+                "meaning": "Confirmed over multiple drive cycles — the MIL (check-engine light) is on for these.",
+                "codes": _read(0x03),
+            },
+            "pending": {
+                "meaning": "Detected this drive cycle but not yet confirmed — may clear on their own if the fault doesn't recur.",
+                "codes": _read(0x07),
+            },
+            "permanent": {
+                "meaning": "Confirmed faults the ECU won't let you clear manually — they clear only after the ECU itself re-verifies the repair over several drive cycles.",
+                "codes": _read(0x0A),
+            },
+        }
+
+    @_synchronized
     def read_pid(self, pid: int) -> dict:
         self._require()
         try:
