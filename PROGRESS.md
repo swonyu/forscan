@@ -54,7 +54,11 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
 - [ ] 5.1 Flashing state machine (0x27/0x34/0x36/0x37), stubbed — needs FDRS keys/calibrations
 
 ## Tooling
-- [x] `fordscope-build` skill (`.claude/skills/`) + project `CLAUDE.md` — the build protocol,
+- [x] `fordscope-build` skill (`.claude/skills/`) + project `CLAUDE.md`
+- [x] `ford/fusion_2016.py` — 2016 Fusion S profile from a 7-agent adversarially-verified research
+      run: CONFIRMED module addresses (PCM 7E0/ABS 760/RCM 737/APIM 7D0/IPC 720/BCM 726) +
+      confirm-on-vehicle/plausible tiers; As-Built pointers COMMUNITY-SOURCED (block-level only,
+      no fabricated byte maps), with the verification's attribution corrections. Honesty tests. — the build protocol,
       verify command, layering, and hard legal/safety boundaries. Authored RED→GREEN via the
       writing-skills discipline: RED baselines showed the *honesty* discipline is already
       ambient (so no discipline skill written — it would be redundant); the real gap was the

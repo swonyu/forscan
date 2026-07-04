@@ -23,6 +23,7 @@ from .asbuilt import (
 )
 from .asbuilt_format import AsBuiltBlock, parse_block, compute_checksum
 from .features import FeatureDefinition, FeatureCoder, EXAMPLE_FEATURES
+from . import fusion_2016
 
 __all__ = [
     "AddressPair",
@@ -48,4 +49,5 @@ __all__ = [
     "FeatureDefinition",
     "FeatureCoder",
     "EXAMPLE_FEATURES",
+    "fusion_2016",
 ]
