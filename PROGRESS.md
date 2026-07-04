@@ -749,6 +749,16 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   a lying count), then added `test_decode_dtcs_survives_lying_count_and_ragged_data` pinning four
   cases: over-claiming count, odd trailing byte dropped, `0000` pad skipped, count-0-wins. +1 test →
   **420 green**.
+- **Iter 103** (PID scaling-formula coverage — untested distinct formulas) — Audited `decode_pid`'s
+  whole `PID_TABLE`: every formula checks out vs SAE J1979, AND mapped each decode FUNCTION to its
+  tests — 12 of the ~15 families already have known-value tests. Three had NONE, two of them distinct
+  non-trivial scalings where a wrong factor is directly visible: `_module_voltage` (0x42, ÷1000 — a
+  bad divisor reads 1.4 V for a healthy 14 V charging system) and fuel pressure (0x0A, ×3 kPa); plus
+  vehicle speed (0x0D, identity — the single most-displayed live PID). Confirmed the expected values
+  empirically (12.0 V / 300.0 kPa / 100.0 km/h) and added `test_control_module_voltage`,
+  `test_fuel_pressure`, `test_vehicle_speed`. +3 tests → **423 green**. The Mode-06 decode, monitor
+  readiness (`ready`/`not_ready`, incl. the fully-inspection-ready positive path), and supported-PIDs
+  bit-ordering were all AUDITED this fire and found already solid + covered — no change made there.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the

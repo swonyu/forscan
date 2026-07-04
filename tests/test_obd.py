@@ -96,6 +96,24 @@ class ExtendedPidDecodeTests(unittest.TestCase):
     def test_warm_ups_count(self):
         self.assertEqual(decode_pid(0x30, bytes([0x05])).value, 5)
 
+    def test_control_module_voltage(self):
+        # PID 0x42 = ((A*256)+B)/1000 V. A wrong divisor would read 1.4 V for a
+        # healthy 14 V charging system -- a directly visible mistake. This distinct
+        # /1000 scaling had no known-value test.
+        r = decode_pid(0x42, bytes([0x2E, 0xE0]))  # 0x2EE0 = 12000 -> 12.0 V
+        self.assertEqual(r.value, 12.0)
+        self.assertEqual(r.unit, "V")
+
+    def test_fuel_pressure(self):
+        # PID 0x0A = 3*A kPa. Distinct x3 scaling, previously untested.
+        self.assertEqual(decode_pid(0x0A, bytes([100])).value, 300.0)
+
+    def test_vehicle_speed(self):
+        # PID 0x0D = A km/h. Identity, but the single most-displayed live PID --
+        # pin it so a units/lambda regression on the speedometer reading is caught.
+        r = decode_pid(0x0D, bytes([100]))
+        self.assertEqual((r.value, r.unit), (100.0, "km/h"))
+
     def test_short_data_raises(self):
         with self.assertRaises(ValueError):
             decode_pid(0x0C, bytes([0x0F]))  # RPM needs 2 bytes
