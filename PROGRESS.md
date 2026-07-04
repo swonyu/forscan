@@ -685,6 +685,15 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   "no adapters found… Vgate vLinker FS"), `features` (loud EXAMPLE/UNVERIFIED label) — all correct,
   exit 0 on success, every honesty label present in the REAL output. No bugs. **Both integrated
   artifacts (browser UI + CLI) are now verified by running, not by claim.** No code change; 416 green.
+- **Iter 97** — **Test-hygiene fix caught by actually reading the suite output** (not just the
+  pass/fail line): `test_run_closes_socket_on_keyboard_interrupt` invoked the real `run()` (with
+  `create_server` mocked, so no socket binds) but let `run()`'s user-facing `print()` banner leak
+  into the suite's stdout — a stray "FordScope web app running at…" line that masks real warnings in
+  CI. Fixed by capturing that stdout with `redirect_stdout` and asserting on it
+  (`assertIn "http://127.0.0.1:8737/"`), which BOTH silences the leak AND strengthens the test: the
+  entry point must now be proven to announce its listening URL/port. Verified by running — suite
+  output ends cleanly at `OK`, no banner; +1 assertion. No production code change; 416 green.
+  (Genuine hygiene/coverage fix, not a manufactured feature.)
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the

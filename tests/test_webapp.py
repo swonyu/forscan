@@ -584,16 +584,23 @@ class ConcurrencyTests(unittest.TestCase):
 class RunEntryPointTests(unittest.TestCase):
     def test_run_closes_socket_on_keyboard_interrupt(self):
         # run() must release the listening socket on Ctrl-C (shutdown() alone leaks
-        # the fd — only server_close() releases it).
+        # the fd — only server_close() releases it). Capture stdout so run()'s
+        # user-facing banner does not leak into the suite output, and assert on it:
+        # run() must announce the URL/port it is listening on.
+        import io
+        from contextlib import redirect_stdout
         from unittest import mock
         from fordscope.webapp import server as srv
 
         fake = mock.MagicMock()
         fake.serve_forever.side_effect = KeyboardInterrupt
         fake.server_address = ("127.0.0.1", 8737)
+        out = io.StringIO()
         with mock.patch.object(srv, "create_server", return_value=fake):
-            srv.run(open_browser=False)
+            with redirect_stdout(out):
+                srv.run(open_browser=False)
         fake.server_close.assert_called_once()
+        self.assertIn("http://127.0.0.1:8737/", out.getvalue())
 
 
 if __name__ == "__main__":
