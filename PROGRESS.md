@@ -318,6 +318,11 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   filename, content_type)`; `GET /api/report.txt` serves the health report as a `text/plain`
   attachment + a "Download report" button — save a dated diagnostic record / send to a mechanic.
   +2 tests; verified by running (200, text/plain, attachment filename). 328 total, `Ran 328 … OK`.
+- **Iter 43** — Vehicle-profile selection in the Mac app. Added a Vehicle dropdown (Auto / 2016
+  Ford Fusion / Generic) whose value flows through `connect` → `open_backend(profile=…)`, so a live
+  scan walks the VERIFIED Fusion module map instead of the generic guess. Backend already supported
+  it; this exposes it in the UI. +2 tests (controller + endpoint: fusion profile → scan shows the
+  Fusion-specific RCM module). 330 total, `Ran 330 tests … OK`.
 - **Iter 27** — Completed adversarial review coverage (CLI + scan services, the last un-reviewed
   logic). **1 more real bug found & fixed test-first** (268 total green): `scan_module` /
   `scan_module_dtcs` only caught `UdsError`, but `IsoTpSocket` raises a separate `IsoTpError`

@@ -36,6 +36,11 @@ INDEX_HTML = """<!doctype html>
 <div id="banner" class="banner"></div>
 <div class="row">
   <select id="port"></select>
+  <select id="profile" title="module profile for scans">
+    <option value="">Vehicle: Auto</option>
+    <option value="fusion2016">2016 Ford Fusion</option>
+    <option value="generic">Generic Ford</option>
+  </select>
   <button onclick="connect()">Connect</button>
   <button onclick="disconnect()">Disconnect</button>
 </div>
@@ -67,7 +72,8 @@ async function loadPorts(){const r=await fetch('/api/ports');const j=await r.jso
 function setBanner(t){const b=document.getElementById('banner');b.textContent=t||'';
  b.className='banner'+(t&&t.indexOf('LIVE')>=0?' live':(t?' sim':''));}
 async function connect(){const port=document.getElementById('port').value;
- const r=await fetch('/api/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({port})});
+ const profile=document.getElementById('profile').value||null;
+ const r=await fetch('/api/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({port,profile})});
  const j=await r.json();setBanner(j.banner||j.error);}
 async function disconnect(){await fetch('/api/disconnect',{method:'POST'});setBanner('');document.getElementById('out').textContent='';}
 async function run(url){const r=await fetch(url);const j=await r.json();if(j.banner)setBanner(j.banner);

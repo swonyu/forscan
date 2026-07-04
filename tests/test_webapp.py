@@ -31,6 +31,13 @@ class ControllerTests(unittest.TestCase):
         with self.assertRaises(NotConnectedError):
             FordScopeController().scan()
 
+    def test_connect_with_fusion_profile_scans_fusion_modules(self):
+        c = FordScopeController()
+        c.connect(DEMO_PORT, profile="fusion2016")
+        report = c.scan()
+        self.assertIn("RCM", report)          # RCM 0x737 is in the Fusion profile...
+        self.assertIn("not present", report)  # ...and absent from the demo bus
+
     def test_live_reads_multiple_pids(self):
         c = FordScopeController()
         c.connect(DEMO_PORT)
@@ -149,6 +156,12 @@ class ServerTests(unittest.TestCase):
     def test_ports_endpoint(self):
         _s, j = self._json("GET", "/api/ports")
         self.assertIn(DEMO_PORT, j["ports"])
+
+    def test_connect_with_profile_via_endpoint(self):
+        self._json("POST", "/api/connect", {"port": DEMO_PORT, "profile": "fusion2016"})
+        _s, j = self._json("GET", "/api/scan")
+        self.assertIn("RCM", j["text"])
+        self.assertIn("not present", j["text"])
 
     def test_connect_scan_read_vin_flow(self):
         _s, j = self._json("POST", "/api/connect", {"port": DEMO_PORT})
