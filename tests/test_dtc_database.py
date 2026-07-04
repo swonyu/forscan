@@ -67,7 +67,10 @@ class FallbackHonestyTests(unittest.TestCase):
         self.assertEqual(describe_dtc("P0143").subsystem, "Fuel and air metering")
 
     def test_malformed_code_raises(self):
-        for bad in ("X0143", "P143", "P01433", ""):
+        # Bad system letter / wrong length / EMPTY, plus an out-of-range digit-2
+        # (SAE allows only 0-3) and a non-hex digit-3 — all must be rejected, not
+        # silently treated as a well-formed (if uncurated) code.
+        for bad in ("X0143", "P143", "P01433", "", "P4143", "P0G43"):
             with self.assertRaises(ValueError):
                 describe_dtc(bad)
 

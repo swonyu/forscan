@@ -151,6 +151,11 @@ def describe_dtc(code: str) -> DtcInfo:
     """Look up a DTC; fall back to structural category when not curated."""
     if len(code) != 5 or code[0] not in _SYSTEMS:
         raise ValueError(f"malformed DTC code: {code!r}")
+    # SAE J2012: digit-2 is 0-3 (from 2 bits); digits 3-5 are hex nibbles. A code
+    # outside that shape isn't a valid DTC — reject it rather than let it masquerade
+    # as a well-formed (if uncurated) code.
+    if code[1] not in "0123" or any(c not in "0123456789ABCDEF" for c in code[2:5].upper()):
+        raise ValueError(f"malformed DTC code: {code!r}")
     system = _SYSTEMS[code[0]]
     manufacturer_specific = code[1] in ("1", "3")
     # The _P_SUBSYSTEMS third-digit taxonomy is SAE J2012's *generic P0-family*
