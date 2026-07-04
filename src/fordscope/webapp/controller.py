@@ -108,3 +108,9 @@ class FordScopeController:
     def vin(self) -> str:
         self._require()
         return self._obd().read_vin()
+
+    def clear_dtcs(self) -> None:
+        """Clear stored trouble codes (OBD Mode 04) — a real mutating action; the
+        UI gates it behind a confirm dialog."""
+        self._require()
+        self._obd().clear_dtcs()

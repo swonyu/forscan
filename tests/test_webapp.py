@@ -52,13 +52,25 @@ class ControllerTests(unittest.TestCase):
         with self.assertRaises(NotConnectedError):
             c.scan()
 
+    def test_clear_dtcs_requires_connection(self):
+        with self.assertRaises(NotConnectedError):
+            FordScopeController().clear_dtcs()
+
+    def test_clear_dtcs_when_connected_does_not_raise(self):
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        c.clear_dtcs()  # no exception
+
 
 class ServerTests(unittest.TestCase):
     def setUp(self):
         # Fresh server (and fresh controller) per test — no cross-test state.
         self.server = create_server(port=0)
         self.port = self.server.server_address[1]
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        # Small poll interval so shutdown() returns fast (keeps the suite quick).
+        self.thread = threading.Thread(
+            target=lambda: self.server.serve_forever(poll_interval=0.02), daemon=True
+        )
         self.thread.start()
 
     def tearDown(self):
@@ -111,6 +123,15 @@ class ServerTests(unittest.TestCase):
         vals = {r["name"]: r["value"] for r in j["rows"]}
         self.assertEqual(vals["Engine RPM"], 1000.0)
         self.assertEqual(vals["Engine coolant temperature"], 50)
+
+    def test_clear_dtc_endpoint(self):
+        self._json("POST", "/api/connect", {"port": DEMO_PORT})
+        _s, j = self._json("POST", "/api/clear-dtc")
+        self.assertTrue(j["ok"])
+
+    def test_clear_dtc_before_connect_returns_409(self):
+        status, _raw = self._req("POST", "/api/clear-dtc")
+        self.assertEqual(status, 409)
 
 
 if __name__ == "__main__":

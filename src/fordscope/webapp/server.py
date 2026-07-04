@@ -43,6 +43,7 @@ INDEX_HTML = """<!doctype html>
   <button onclick="run('/api/scan')">Whole-car scan</button>
   <button onclick="run('/api/dtc')">Trouble codes</button>
   <button onclick="run('/api/vin')">VIN</button>
+  <button onclick="clearDtc()">Clear codes</button>
   <input id="pid" value="0C" size="4"><button onclick="readPid()">Read PID (hex)</button>
 </div>
 <div class="row">
@@ -67,6 +68,11 @@ async function run(url){const r=await fetch(url);const j=await r.json();if(j.ban
 async function readPid(){const pid=document.getElementById('pid').value;
  const r=await fetch('/api/read?pid='+encodeURIComponent(pid));const j=await r.json();
  document.getElementById('out').textContent=j.error?j.error:(j.name+': '+j.value+' '+j.unit);}
+async function clearDtc(){
+ if(!confirm('Clear stored trouble codes? This also resets emissions readiness monitors.'))return;
+ const r=await fetch('/api/clear-dtc',{method:'POST'});const j=await r.json();
+ if(j.banner)setBanner(j.banner);
+ document.getElementById('out').textContent=j.ok?'Trouble codes cleared.':(j.error||'error');}
 let liveTimer=null;
 async function pollLive(){const pids=document.getElementById('livepids').value;
  const r=await fetch('/api/live?pids='+encodeURIComponent(pids));const j=await r.json();
@@ -143,7 +149,12 @@ def _make_handler(controller: FordScopeController):
                 if u.path == "/api/disconnect":
                     controller.disconnect()
                     return self._json({"ok": True})
+                if u.path == "/api/clear-dtc":
+                    controller.clear_dtcs()
+                    return self._json({"ok": True, "banner": controller.banner})
                 return self._json({"error": "not found"}, 404)
+            except NotConnectedError as exc:
+                return self._json({"error": str(exc)}, 409)
             except Exception as exc:
                 return self._json({"error": str(exc)}, 400)
 

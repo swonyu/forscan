@@ -251,6 +251,10 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   every 1s into a table (Start/Stop). +3 tests; verified by running end-to-end over HTTP (RPM 1000
   / coolant 50 / speed 64 streaming). Deliberately did NOT attempt `.app` packaging (untestable
   here, and the owner asked me not to make mistakes). 279 total, `Ran 279 tests … OK` (2.5s).
+- **Iter 30** — Phase 4: Clear-codes button in the Mac app. `controller.clear_dtcs` (Mode 04) +
+  `POST /api/clear-dtc` (mutating → POST, `NotConnectedError`→409) + a UI button gated behind a
+  browser confirm ("also resets emissions readiness"). +4 tests. Also sped the server tests:
+  `serve_forever(poll_interval=0.02)` so shutdown returns fast — suite 3.5s → **0.195s**. 283 green.
 - **Iter 27** — Completed adversarial review coverage (CLI + scan services, the last un-reviewed
   logic). **1 more real bug found & fixed test-first** (268 total green): `scan_module` /
   `scan_module_dtcs` only caught `UdsError`, but `IsoTpSocket` raises a separate `IsoTpError`
