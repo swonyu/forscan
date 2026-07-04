@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fordscope"
+version = "0.0.1"
+description = "Ford OBD-II diagnostic + As-Built coding tool for macOS (hardware-abstracted, TDD)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
