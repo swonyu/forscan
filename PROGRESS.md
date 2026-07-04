@@ -954,6 +954,17 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   string so the owner matches what they see on-car, and — per the iter-99 "guard the root cause" pattern
   — added `test_first_run_doc_quotes_the_exact_live_banner` keeping the doc byte-exact with `LIVE_BANNER`
   (fails if either drifts). +1 test → **442 green**.
+- **Iter 123** (holistic browser re-verification of the integrated UI — post-accumulated-changes) —
+  Iters 108–122 changed shared webapp code (IsoTpError across 6 controller handlers, live-poll +
+  connect JS); each was verified individually, but not the WHOLE UI composed together. Applied the
+  "verify the integrated artifact, not the pieces" principle holistically: launched the real webapp
+  (Claude Preview), connected the demo, and drove EVERY function in one session — scan / dtc / vin /
+  health-report / readiness / freeze / calibration / dtc-states / Mode-06 monitors / drive-cycle /
+  supported-PIDs (3 buttons) / read-PID / live dashboard (3 PIDs). All rendered correct demo data
+  (VIN 1FMHK8D89ABA12345, P0143 w/ description, RPM 1000, Mode-06 O2 PASS, …), **zero console errors,
+  zero failed network requests**. The native-macOS-GUI deliverable (Phase 4) is confirmed working
+  end-to-end after all recent changes, not just piece-by-piece. Verification only, no code change;
+  442 green. (Transient launch.json created for the run, removed after.)
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the
