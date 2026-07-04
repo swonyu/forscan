@@ -12,7 +12,7 @@ from typing import List, Optional
 
 from ..cli import open_backend
 from ..isotp import IsoTpSocket
-from ..obd import ObdClient
+from ..obd import ObdClient, ObdError
 from ..services import (
     scan_vehicle,
     format_scan_report,
@@ -90,6 +90,20 @@ class FordScopeController:
         self._require()
         r = self._obd().current_data(pid)
         return {"pid": pid, "name": r.name, "value": r.value, "unit": r.unit}
+
+    def live(self, pids) -> list:
+        """One live-data sample across several PIDs. Unsupported/undecodable PIDs
+        return value=None (blank) rather than failing the whole sample."""
+        self._require()
+        obd = self._obd()
+        rows = []
+        for pid in pids:
+            try:
+                r = obd.current_data(pid)
+                rows.append({"pid": pid, "name": r.name, "value": r.value, "unit": r.unit})
+            except (ObdError, KeyError, ValueError):
+                rows.append({"pid": pid, "name": f"PID {pid:02X}", "value": None, "unit": ""})
+        return rows
 
     def vin(self) -> str:
         self._require()

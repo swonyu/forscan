@@ -26,6 +26,9 @@ INDEX_HTML = """<!doctype html>
  button{cursor:pointer;color:#39d353;border-color:#2f5c3a}
  button:hover{background:#1b2320}
  pre{background:#0f1213;border:1px solid #2a3033;border-radius:6px;padding:14px;overflow:auto;min-height:200px;white-space:pre-wrap}
+ table{border-collapse:collapse;margin:10px 0}
+ td{border:1px solid #2a3033;padding:6px 14px}
+ td:last-child{color:#39d353;text-align:right}
  .hint{color:#7d888c;font-size:12px}
 </style></head><body>
 <h1>FordScope</h1>
@@ -42,6 +45,12 @@ INDEX_HTML = """<!doctype html>
   <button onclick="run('/api/vin')">VIN</button>
   <input id="pid" value="0C" size="4"><button onclick="readPid()">Read PID (hex)</button>
 </div>
+<div class="row">
+  <input id="livepids" value="0C,05,0D" size="18" title="comma-separated hex PIDs">
+  <button onclick="startLive()">Start live</button>
+  <button onclick="stopLive()">Stop</button>
+</div>
+<table id="live"></table>
 <pre id="out"></pre>
 <script>
 async function loadPorts(){const r=await fetch('/api/ports');const j=await r.json();
@@ -58,6 +67,15 @@ async function run(url){const r=await fetch(url);const j=await r.json();if(j.ban
 async function readPid(){const pid=document.getElementById('pid').value;
  const r=await fetch('/api/read?pid='+encodeURIComponent(pid));const j=await r.json();
  document.getElementById('out').textContent=j.error?j.error:(j.name+': '+j.value+' '+j.unit);}
+let liveTimer=null;
+async function pollLive(){const pids=document.getElementById('livepids').value;
+ const r=await fetch('/api/live?pids='+encodeURIComponent(pids));const j=await r.json();
+ const t=document.getElementById('live');
+ if(j.error){t.innerHTML='<tr><td>'+j.error+'</td></tr>';stopLive();return;}
+ if(j.banner)setBanner(j.banner);
+ t.innerHTML=(j.rows||[]).map(x=>'<tr><td>'+x.name+'</td><td>'+(x.value==null?'—':x.value+' '+x.unit)+'</td></tr>').join('');}
+function startLive(){stopLive();pollLive();liveTimer=setInterval(pollLive,1000);}
+function stopLive(){if(liveTimer){clearInterval(liveTimer);liveTimer=null;}}
 loadPorts();
 </script></body></html>"""
 
@@ -105,6 +123,10 @@ def _make_handler(controller: FordScopeController):
                 if u.path == "/api/read":
                     pid = int(parse_qs(u.query).get("pid", ["0C"])[0], 16)
                     return self._json(controller.read_pid(pid))
+                if u.path == "/api/live":
+                    pids_str = parse_qs(u.query).get("pids", ["0C,05,0D"])[0]
+                    pids = [int(p, 16) for p in pids_str.split(",") if p.strip()]
+                    return self._json({"rows": controller.live(pids), "banner": controller.banner})
                 return self._json({"error": "not found"}, 404)
             except NotConnectedError as exc:
                 return self._json({"error": str(exc)}, 409)

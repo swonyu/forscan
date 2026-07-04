@@ -66,7 +66,10 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
       vLinker FS via the elm327 backend) so diagnostics run native on macOS — no FORScan/Windows VM.
       Demo (simulator) path fully functional + tested; real serial is NEEDS ON-CAR CHECK. Scope: it's
       a native DIAGNOSTICS app, not a full FORScan As-Built replacement (maps unverified).
-- [ ] 4.1 (later) package as a double-clickable .app (py2app/pyinstaller); live-data dashboard view.
+- [x] 4.1 Live-data dashboard in the web app: `controller.live(pids)` + `GET /api/live?pids=…`
+      + a browser view that polls every 1s into a table (Start/Stop). Unsupported PIDs blank, not fail.
+- [ ] 4.2 (later) package as a double-clickable .app (py2app/pyinstaller) — deferred: needs
+      uninstallable tooling + can't be verified here, so not built blind.
 
 ## Tooling
 - [x] `fordscope-build` skill (`.claude/skills/`) + project `CLAUDE.md`
@@ -243,6 +246,11 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   found & fixed:** `import webbrowser` at module top hung ~35s/test under the `-m unittest` runner
   on macOS — made it lazy (only in `run()`); suite back to 2.0s. Tkinter unavailable here, so a
   browser UI was the right, portable, testable choice. 276 total, `Ran 276 tests … OK`.
+- **Iter 29** — Phase 4.1: live-data dashboard in the Mac app. `controller.live(pids)` (blank for
+  unsupported PIDs, never fails the sample) + `GET /api/live?pids=…` + a browser view that polls
+  every 1s into a table (Start/Stop). +3 tests; verified by running end-to-end over HTTP (RPM 1000
+  / coolant 50 / speed 64 streaming). Deliberately did NOT attempt `.app` packaging (untestable
+  here, and the owner asked me not to make mistakes). 279 total, `Ran 279 tests … OK` (2.5s).
 - **Iter 27** — Completed adversarial review coverage (CLI + scan services, the last un-reviewed
   logic). **1 more real bug found & fixed test-first** (268 total green): `scan_module` /
   `scan_module_dtcs` only caught `UdsError`, but `IsoTpSocket` raises a separate `IsoTpError`

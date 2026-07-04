@@ -30,6 +30,20 @@ class ControllerTests(unittest.TestCase):
         with self.assertRaises(NotConnectedError):
             FordScopeController().scan()
 
+    def test_live_reads_multiple_pids(self):
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        rows = c.live([0x0C, 0x05])
+        self.assertEqual(rows[0]["value"], 1000.0)  # RPM
+        self.assertEqual(rows[1]["value"], 50)      # coolant
+
+    def test_live_blank_for_unsupported_pid(self):
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        rows = c.live([0x0C, 0x99])  # 0x99 unsupported
+        self.assertEqual(rows[0]["value"], 1000.0)
+        self.assertIsNone(rows[1]["value"])
+
     def test_disconnect_clears_state(self):
         c = FordScopeController()
         c.connect(DEMO_PORT)
@@ -90,6 +104,13 @@ class ServerTests(unittest.TestCase):
     def test_scan_before_connect_returns_409(self):
         status, _raw = self._req("GET", "/api/scan")
         self.assertEqual(status, 409)
+
+    def test_live_endpoint(self):
+        self._json("POST", "/api/connect", {"port": DEMO_PORT})
+        _s, j = self._json("GET", "/api/live?pids=0C,05")
+        vals = {r["name"]: r["value"] for r in j["rows"]}
+        self.assertEqual(vals["Engine RPM"], 1000.0)
+        self.assertEqual(vals["Engine coolant temperature"], 50)
 
 
 if __name__ == "__main__":
