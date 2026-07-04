@@ -28,6 +28,7 @@ class SimulatedObdEcu:
         calibration_ids: "Optional[List[str]]" = None,
         cvns: "Optional[List[bytes]]" = None,
         ecu_names: "Optional[List[str]]" = None,
+        monitor_tests: "Optional[Dict[int, list]]" = None,
         freeze_frame: "Optional[Dict[int, bytes]]" = None,
         freeze_dtc: "Optional[str]" = None,
     ) -> None:
@@ -39,6 +40,8 @@ class SimulatedObdEcu:
         self.calibration_ids: List[str] = list(calibration_ids or [])
         self.cvns: List[bytes] = [bytes(c) for c in (cvns or [])]
         self.ecu_names: List[str] = list(ecu_names or [])
+        # {mid: [(tid, uasid, value, min_limit, max_limit), ...]}
+        self.monitor_tests: Dict[int, list] = {int(k): list(v) for k, v in (monitor_tests or {}).items()}
         self.freeze_frame: Dict[int, bytes] = {int(k): bytes(v) for k, v in (freeze_frame or {}).items()}
         self.freeze_dtc = freeze_dtc
         self.cleared = False
@@ -58,6 +61,8 @@ class SimulatedObdEcu:
             self.pending = []
             self.cleared = True
             return bytes([0x44])
+        if mode == 0x06:
+            return self._mode06(request)
         if mode == 0x07:
             return self._dtc_block(0x47, self.pending)
         if mode == 0x0A:
@@ -110,6 +115,23 @@ class SimulatedObdEcu:
         for code in codes:
             body += encode_dtc(code)
         return bytes([sid]) + body
+
+    def _mode06(self, request: bytes) -> bytes:
+        # [0x06, MID] -> [0x46, MID, TID, UASID, value(2), min(2), max(2), ...records]
+        if len(request) < 2:
+            return bytes([0x7F, 0x06, 0x13])
+        mid = request[1]
+        if mid not in self.monitor_tests:
+            return bytes([0x7F, 0x06, 0x31])  # requestOutOfRange
+        body = bytes([0x46])
+        for tid, uasid, value, mn, mx in self.monitor_tests[mid]:
+            body += bytes([
+                mid, tid & 0xFF, uasid & 0xFF,
+                (value >> 8) & 0xFF, value & 0xFF,
+                (mn >> 8) & 0xFF, mn & 0xFF,
+                (mx >> 8) & 0xFF, mx & 0xFF,
+            ])
+        return body
 
     def _mode09(self, request: bytes) -> bytes:
         if len(request) < 2:

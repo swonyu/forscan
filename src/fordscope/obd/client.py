@@ -16,11 +16,13 @@ from .pids import (
     decode_monitor_status,
 )
 from .dtc_database import DtcInfo, describe_dtc
+from .mode06 import decode_monitor_tests, MonitorTest
 
 MODE_CURRENT_DATA = 0x01
 MODE_FREEZE_FRAME = 0x02
 MODE_STORED_DTCS = 0x03
 MODE_CLEAR_DTCS = 0x04
+MODE_MONITOR_TESTS = 0x06
 MODE_PENDING_DTCS = 0x07
 MODE_VEHICLE_INFO = 0x09
 MODE_PERMANENT_DTCS = 0x0A
@@ -217,6 +219,16 @@ class ObdClient:
     def read_ecu_names(self) -> "list[str]":
         """Mode 09 InfoType 0x0A: the ECU name/acronym(s), ASCII. [NEEDS ON-CAR CHECK]"""
         return self._text_items(self._read_vehicle_info(VEHICLE_INFO_ECU_NAME), 20)
+
+    def monitor_tests(self, mid: int) -> "list[MonitorTest]":
+        """Mode 06: on-board monitoring test results for a Monitor ID. Each record is
+        named by its standardized MID category, with the raw value + the ECU's own
+        min/max + a pass/fail from those; the TID stays raw (OEM-specific)."""
+        resp = self._request(bytes([MODE_MONITOR_TESTS, mid & 0xFF]))
+        # [0x46, MID, TID, UASID, value(2), min(2), max(2), ...more records]
+        if len(resp) < 2 or resp[1] != (mid & 0xFF):
+            raise ObdError("Mode 06 MID echo mismatch")
+        return decode_monitor_tests(resp[1:])
 
     def read_cvns(self) -> "list[str]":
         """Mode 09 InfoType 0x06: the calibration verification number(s) — a 4-byte
