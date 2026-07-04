@@ -575,3 +575,23 @@ feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and 
   `_request` change is high-blast-radius) then STOPPING general audits regardless of any LOW tail —
   the owed work is the R3/R5 research re-run (blocked features) and R4, which the audit rabbit-hole has
   crowded out since iter 52. 26 real bugs fixed across 7 runs.**
+- **Iters 81–82** — 8th (final) audit: honest script reported `complete:false` (2 dims dropped —
+  honesty + resource-concurrency verifiers died; both were fully audited & fixed in runs 6/7 so not a
+  real gap). never-build verified CLEAN again. **2 MED, no HIGH:** (81) removed `write_block`'s dead
+  `require_backup=False` bypass — the backup gate is now structurally un-bypassable, not a scattered
+  guard. (82) a malformed ISO-TP frame raised a bare `ValueError` the whole-car scan didn't catch → one
+  garbage frame aborted the ENTIRE scan; the socket now wraps it as `IsoTpError` (the layer boundary),
+  so the scan skips-and-continues per its own contract. +2 tests. 395 green.
+
+## 🏁 SAFETY-AUDIT CYCLE CLOSED (2026-07-04, after 8 runs)
+**28 real app bugs found & fixed test-first across 8 adversarial-audit runs** (Opus orchestrator +
+Sonnet-max subagents), incl. ~9 HIGH (backup-clobber, backup-atomicity, backup-key-collision, SID
+misattribution, VIN corruption, SecurityAccess empty-seed, OBD 0x78, vanishing LIVE banner). The
+safety-critical subsystems (backup-before-write, never-build boundaries, SecurityAccess) are now
+verified CLEAN by dedicated dimensions across the last 3 runs. The audit script itself was hardened
+TWICE against false-completeness (auditor-null; verifier-drop). **STOPPING general audits** — a
+Sonnet-max reviewer keeps finding real-but-edge issues indefinitely; severity has settled to MED/LOW
+and the dangerous parts are clean. **The real remaining risk-reduction is the on-car run (R8), owner-
+gated — not audit round 9.** Residual (honest): the 8th run's 2 dropped dims were audited clean/fixed
+in runs 6/7; a future maintainer wanting a fully-complete final pass can re-run the saved workflow.
+NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, neglected since iter 52.
