@@ -63,3 +63,39 @@ full run output in the workflow task record.)*
   FORScan-endorsed reference; note the Feb-2025 vLinker compatibility caveat honestly to the owner.
 - **R3 & R5 stay BLOCKED** — the drive-cycle and Mode 06 facts did NOT verify (rate-limit). Re-run
   those angles alone before building either. No unverified drive-cycle/Mode-06 claims enter the tool.
+
+---
+
+## Focused R3/R5 re-run — 2026-07-04 (Sonnet-max, 4 angles) — SUCCEEDED, 18 claims verified
+The prior rate-limited run is superseded for the diagnostic angles. 18 claims survived 3-vote
+adversarial verification → 6 findings. **R5 unblocked; R3 partially unblocked.**
+
+### R5 (Mode 06) — BUILDABLE
+- **M1. Architecture** · HIGH · Mode 06 (Service $06) = MID (Monitor ID) → TID/CID (Test ID) → raw
+  numeric test value vs min/max limits. Covers catalyst, EGR, EVAP, fuel, per-cylinder misfire, O2/
+  heater (+VVT/sec-air/NOx on applicable). 20+yr stable SAE J1979 description; applies to the 2016 Fusion.
+- **M2. MID numbering IS standardized cross-manufacturer** on CAN vehicles (2008+, so the 2016 Fusion)
+  · HIGH (cross-OEM triangulated: Prius/Hyundai/Subaru forums + GM PDF all show MID $21 = catalyst).
+  Usable table: `$01-07`=O2 sensor monitors, `$21-22`=catalyst, `$31-32`=EGR / `$33`=EGR stepper,
+  `$3A-3C`=EVAP, `$71`=air injection, `$A1`=misfire (general), `$A2-AB`=per-cylinder misfire. This is
+  the GENERIC SAE-standardized layer (not Ford-proprietary) — directly usable, honest.
+- **M3. TID meaning + limit SEMANTICS are OEM-calibrated, NOT standardized** · HIGH. Generic tooling
+  can show the MID category + raw value + the ECU's OWN returned min/max + a pass/fail computed from
+  those, but can NEVER name a manufacturer-specific TID or supply a verdict beyond the ECU's limits.
+  **→ R5 honesty line: name the MID category, show raw value/min/max + pass/fail-from-returned-limits,
+  flag TID as OEM-specific (do NOT fabricate TID names or unit semantics).**
+
+### R3 (drive-cycle coach) — PARTIAL
+- **D1. EVAP drive cycle** · HIGH (Ford-specific corroborated): 45–65 mph steady cruise for 10
+  CONTINUOUS minutes, fuel tank ½–¾ full, avoid hills/sharp turns. The ONE monitor with verified specifics.
+- **D2. Ford-specific catalyst + HEGO/O2 drive-condition claims were REFUTED** (0-3 / 1-2 votes). So R3
+  ships the verified EVAP cycle + clearly-labeled GENERIC guidance for the other monitors; the other
+  monitors' Ford-specific cycles remain an open gap (further research or on-car empirical work).
+
+### As-Built (comfort/lighting, distinct from R5)
+- Block format + sum-to-zero checksum + several concrete Fusion re-codes (door-ajar lighting color,
+  fog-light memory, double-honk disable, DRL, remote start) are VERIFIED with a hand-verified checksum
+  — CONFIRMS FordScope's existing As-Built framework/checksum. **BUT the community list is mixed-
+  verification: any specific byte value must be confirmed via a live As-Built read on the actual 2016
+  Fusion before writing.** So the As-Built *mechanism* is validated; specific *maps* stay UNVERIFIED
+  (the standing rule). Mode 06 and As-Built are separate, non-overlapping domains — keep them apart.
