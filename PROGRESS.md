@@ -200,3 +200,8 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   now creates parent dirs. +3 tests incl. a full durable set→restore across two invocations;
   verified by running. **As-Built safety loop (backup→write→verify→restore) complete in the CLI.**
   235 total, `Ran 235 tests … OK`.
+- **Iter 22** — Live-data logging (`services/datalog.py`, optional-tier). `DataLogger` polls Mode 01
+  PIDs with an INJECTABLE clock/sleep (deterministic tests, no real waiting); unsupported/undecodable
+  PIDs log as blank cells, not aborts. `rows_to_csv`/`write_csv_file` with named+unit column headers.
+  CLI `log --pids 0C,05,0D --samples N --interval S [--out file.csv]`. +11 tests; verified by running
+  (CSV with `Engine RPM (rpm)`,`…coolant…(degC)` columns). 246 total, `Ran 246 tests … OK`.

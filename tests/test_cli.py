@@ -184,6 +184,27 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("simulator only", err)
 
+    def test_log_to_stdout(self):
+        code, out, _ = run("log", "--pids", "0C,05", "--samples", "2", "--interval", "0")
+        self.assertEqual(code, 0)
+        self.assertIn("Engine RPM (rpm)", out)
+        self.assertIn("1000.0", out)
+
+    def test_log_to_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "drive.csv")
+            code, out, _ = run("log", "--pids", "0C", "--samples", "2", "--out", path)
+            self.assertEqual(code, 0)
+            self.assertIn("logged 2 samples", out)
+            self.assertTrue(os.path.exists(path))
+            with open(path) as fh:
+                self.assertIn("Engine RPM (rpm)", fh.read())
+
+    def test_log_bad_pid_errors(self):
+        code, _out, err = run("log", "--pids", "zz")
+        self.assertEqual(code, 3)
+        self.assertIn("error", err.lower())
+
 
 class OpenBackendTests(unittest.TestCase):
     def test_simulator_returns_demo_and_simulated_banner(self):

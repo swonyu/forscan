@@ -33,6 +33,8 @@ from .services import (
     format_scan_report,
     scan_vehicle_dtcs,
     format_dtc_report,
+    DataLogger,
+    rows_to_csv,
 )
 
 BANNER = "-- SIMULATED VEHICLE (no hardware attached) --"
@@ -223,6 +225,11 @@ def _build_parser() -> argparse.ArgumentParser:
     sf.add_argument("--confirm", action="store_true", help="actually write (default is a dry run)")
     rs = sub.add_parser("restore-feature", help="undo a set-feature from its saved backup (simulator only)")
     rs.add_argument("key", help="feature key, e.g. fog_drl")
+    lg = sub.add_parser("log", help="log live PIDs to CSV")
+    lg.add_argument("--pids", default="0C,05,0D", help="comma-separated hex PIDs (default RPM,coolant,speed)")
+    lg.add_argument("--samples", type=int, default=5, help="number of samples to capture")
+    lg.add_argument("--interval", type=float, default=0.0, help="seconds between samples")
+    lg.add_argument("--out", default=None, help="write CSV to this file (else print)")
     return parser
 
 
@@ -326,6 +333,17 @@ def main(argv: Optional[List[str]] = None, *, port_factory=None) -> int:
             _def, now = coder.read_feature(args.key)
             print(banner)
             print(f"{feature.name} [{feature.module}]: restored to '{now}' from backup.")
+        elif args.command == "log":
+            pids = [int(p, 16) for p in args.pids.split(",") if p.strip()]
+            rows = DataLogger(_obd_client(bus), pids).run(args.samples, interval=args.interval)
+            csv_text = rows_to_csv(rows, pids)
+            print(banner)
+            if args.out:
+                with open(args.out, "w", newline="") as fh:
+                    fh.write(csv_text)
+                print(f"logged {len(rows)} samples of {len(pids)} PID(s) to {args.out}")
+            else:
+                print(csv_text, end="")
     except Exception as exc:  # surface a clean message, non-zero exit
         print(f"error: {exc}", file=sys.stderr)
         return 3

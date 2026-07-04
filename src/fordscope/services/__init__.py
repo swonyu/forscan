@@ -15,6 +15,13 @@ from .dtc_scan import (
     total_dtc_count,
     format_dtc_report,
 )
+from .datalog import (
+    LogRow,
+    DataLogger,
+    column_header,
+    rows_to_csv,
+    write_csv_file,
+)
 
 __all__ = [
     "ModuleInfo",
@@ -28,4 +35,9 @@ __all__ = [
     "scan_vehicle_dtcs",
     "total_dtc_count",
     "format_dtc_report",
+    "LogRow",
+    "DataLogger",
+    "column_header",
+    "rows_to_csv",
+    "write_csv_file",
 ]
