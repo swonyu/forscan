@@ -90,6 +90,20 @@ class ControllerTests(unittest.TestCase):
         self.assertIn("P0143", report)
         self.assertIn("Freeze frame", report)
 
+    def test_calibration(self):
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        cal = c.calibration()
+        self.assertIn("DEMO-PCM-CAL-01", cal["calids"])
+        self.assertEqual(cal["cvns"], ["1A2B3C4D"])
+
+    def test_health_report_includes_calibration(self):
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        report = c.health_report()
+        self.assertIn("Calibration", report)
+        self.assertIn("DEMO-PCM-CAL-01", report)
+
     def test_readiness(self):
         c = FordScopeController()
         c.connect(DEMO_PORT)
@@ -259,6 +273,16 @@ class ServerTests(unittest.TestCase):
 
     def test_readiness_before_connect_returns_409(self):
         status, _raw = self._req("GET", "/api/readiness")
+        self.assertEqual(status, 409)
+
+    def test_calibration_endpoint(self):
+        self._json("POST", "/api/connect", {"port": DEMO_PORT})
+        _s, j = self._json("GET", "/api/calibration")
+        self.assertIn("DEMO-PCM-CAL-01", j["calids"])
+        self.assertEqual(j["cvns"], ["1A2B3C4D"])
+
+    def test_calibration_before_connect_returns_409(self):
+        status, _raw = self._req("GET", "/api/calibration")
         self.assertEqual(status, 409)
 
     def test_report_endpoint(self):

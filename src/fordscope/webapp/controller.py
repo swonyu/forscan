@@ -153,6 +153,22 @@ class FordScopeController:
         return self._obd().read_vin()
 
     @_synchronized
+    def calibration(self) -> dict:
+        """Mode 09 calibration ID(s) + verification number(s) — a module's software
+        level (what FORScan/dealers read). Empty lists if the ECU doesn't report
+        them, rather than raising. [NEEDS ON-CAR CHECK]"""
+        self._require()
+        obd = self._obd()
+
+        def _safe(fn):
+            try:
+                return fn()
+            except (ObdError, KeyError, ValueError):
+                return []
+
+        return {"calids": _safe(obd.read_calibration_ids), "cvns": _safe(obd.read_cvns)}
+
+    @_synchronized
     def supported_pids(self) -> list:
         """Which data PIDs the ECU reports, each named if FordScope can decode it.
         The meta range-marker PIDs (0x00/0x20/…) are omitted."""
@@ -181,6 +197,16 @@ class FordScopeController:
             lines.append("VIN: " + self.vin())
         except Exception:
             lines.append("VIN: (unavailable)")
+
+        try:
+            cal = self.calibration()
+            if cal["calids"] or cal["cvns"]:
+                line = "Calibration: " + ", ".join(cal["calids"])
+                if cal["cvns"]:
+                    line += f"  (CVN {', '.join(cal['cvns'])})"
+                lines.append(line)
+        except Exception:
+            pass  # many ECUs don't report Mode 09 calibration — omit silently
 
         try:
             rd = self.readiness()

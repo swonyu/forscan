@@ -76,10 +76,10 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
 Each is buildable + simulator-testable now; every real-car read stays [NEEDS ON-CAR CHECK].
 Build order R1→R2→R3→R6→R4→R5, a review pass interleaved. **When these are done, STOP
 feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and say so plainly.
-- [~] R1 Mode 09 CALID + CVN (+ ECU name) readout — the "which calibration am I on?" datapoint.
-      ENGINE DONE (iter 49): `ObdClient.read_calibration_ids`/`read_cvns`/`read_ecu_names`
-      (InfoType 0x04/0x06/0x0A, fixed-width item decode) + `SimulatedObdEcu` support + 5 tests.
-      Surfacing (health report / web / CLI) is R1b — next.
+- [x] R1 Mode 09 CALID + CVN (+ ECU name) readout — the "which calibration am I on?" datapoint.
+      Engine (iter 49): `ObdClient.read_calibration_ids`/`read_cvns`/`read_ecu_names`
+      (InfoType 0x04/0x06/0x0A). Surfaced (iter 50): `controller.calibration()`, a Calibration
+      line in the health report, `GET /api/calibration`, demo-seeded. Real read [NEEDS ON-CAR CHECK].
 - [ ] R2 Session min/max/avg per live PID (surfaced in the dashboard + health report)
 - [ ] R3 Readiness / drive-cycle coach — generic OBD conditions to complete each not-ready monitor
 - [ ] R6 DTC state separation (confirmed / pending / permanent) with a one-line meaning
@@ -417,3 +417,9 @@ feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and 
   empties); `SimulatedObdEcu` seeded via `calibration_ids`/`cvns`/`ecu_names` + a `_info_items`
   helper. +5 tests (single + multi CALID, CVN-as-hex, ECU name, unsupported→raises), RED-first.
   348 green. Decode is spec-verified; the real read is [NEEDS ON-CAR CHECK]. Surfacing = R1b.
+- **Iter 50** — R1b: surfaced the calibration readout. `FordScopeController.calibration()`
+  (returns `{calids, cvns}`, empty-not-raising when an ECU doesn't report Mode 09 — safe under
+  the RLock), a "Calibration: … (CVN …)" line in the shareable health report, and
+  `GET /api/calibration`. Demo PCM seeded with an obviously-fake `DEMO-PCM-CAL-01` / CVN
+  1A2B3C4D so it's demonstrable end-to-end. +4 tests (controller, health-report, endpoint,
+  before-connect 409), RED-first. 352 green. **R1 complete** (engine + all surfaces).

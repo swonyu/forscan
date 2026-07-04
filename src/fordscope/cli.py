@@ -66,6 +66,10 @@ def build_demo_vehicle() -> Tuple[SimulatorTransport, List[AddressPair]]:
                 },
                 dtcs=["P0143"],
                 vin=DEMO_VIN,
+                # obviously-fake demo calibration (Mode 09 0x04/0x06) so the
+                # calibration readout is demonstrable end-to-end on the simulator
+                calibration_ids=["DEMO-PCM-CAL-01"],
+                cvns=[bytes([0x1A, 0x2B, 0x3C, 0x4D])],
                 # frozen snapshot captured when P0143 set: idling, warm, stopped
                 freeze_frame={0x0C: bytes([0x0F, 0xA0]), 0x05: bytes([85]), 0x0D: bytes([0x00])},
                 freeze_dtc="P0143",
