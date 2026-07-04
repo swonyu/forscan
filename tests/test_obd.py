@@ -253,6 +253,31 @@ class ObdClientTests(unittest.TestCase):
         client, _ = make_obd(vin=VIN)
         self.assertEqual(client.read_vin(), VIN)
 
+    def test_read_calibration_ids(self):
+        # Mode 09 InfoType 0x04 — the "which calibration am I on?" datapoint.
+        client, _ = make_obd(calibration_ids=["JR3A-14C204-BF"])
+        self.assertEqual(client.read_calibration_ids(), ["JR3A-14C204-BF"])
+
+    def test_read_multiple_calibration_ids(self):
+        # Several modules/calibrations come back as several 16-byte items.
+        client, _ = make_obd(calibration_ids=["CAL-ONE-A", "CAL-TWO-B"])
+        self.assertEqual(client.read_calibration_ids(), ["CAL-ONE-A", "CAL-TWO-B"])
+
+    def test_read_cvns_as_hex(self):
+        # Mode 09 InfoType 0x06 — 4-byte verification number, surfaced as hex.
+        client, _ = make_obd(cvns=[bytes([0xA5, 0xB3, 0xC1, 0xD2])])
+        self.assertEqual(client.read_cvns(), ["A5B3C1D2"])
+
+    def test_read_ecu_names(self):
+        # Mode 09 InfoType 0x0A — 20-byte ASCII ECU name.
+        client, _ = make_obd(ecu_names=["ECM-EngineControl"])
+        self.assertEqual(client.read_ecu_names(), ["ECM-EngineControl"])
+
+    def test_calibration_id_unsupported_raises(self):
+        client, _ = make_obd()  # no calibration data seeded
+        with self.assertRaises(ObdNegativeResponse):
+            client.read_calibration_ids()
+
     def test_invalid_dtc_mode_rejected_client_side(self):
         client, _ = make_obd()
         with self.assertRaises(ValueError):

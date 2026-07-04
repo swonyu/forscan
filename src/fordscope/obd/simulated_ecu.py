@@ -25,6 +25,9 @@ class SimulatedObdEcu:
         pending: "Optional[List[str]]" = None,
         permanent: "Optional[List[str]]" = None,
         vin: "Optional[str]" = None,
+        calibration_ids: "Optional[List[str]]" = None,
+        cvns: "Optional[List[bytes]]" = None,
+        ecu_names: "Optional[List[str]]" = None,
         freeze_frame: "Optional[Dict[int, bytes]]" = None,
         freeze_dtc: "Optional[str]" = None,
     ) -> None:
@@ -33,6 +36,9 @@ class SimulatedObdEcu:
         self.pending: List[str] = list(pending or [])
         self.permanent: List[str] = list(permanent or [])
         self.vin = vin
+        self.calibration_ids: List[str] = list(calibration_ids or [])
+        self.cvns: List[bytes] = [bytes(c) for c in (cvns or [])]
+        self.ecu_names: List[str] = list(ecu_names or [])
         self.freeze_frame: Dict[int, bytes] = {int(k): bytes(v) for k, v in (freeze_frame or {}).items()}
         self.freeze_dtc = freeze_dtc
         self.cleared = False
@@ -111,4 +117,18 @@ class SimulatedObdEcu:
         pid = request[1]
         if pid == 0x02 and self.vin is not None:
             return bytes([0x49, 0x02, 0x01]) + self.vin.encode("ascii")
+        if pid == 0x04 and self.calibration_ids:  # calibration ID(s), 16-byte items
+            return self._info_items(0x04, [s.encode("ascii").ljust(16, b"\x00") for s in self.calibration_ids])
+        if pid == 0x06 and self.cvns:  # calibration verification number(s), 4-byte
+            return self._info_items(0x06, [bytes(c).ljust(4, b"\x00")[:4] for c in self.cvns])
+        if pid == 0x0A and self.ecu_names:  # ECU name(s), 20-byte items
+            return self._info_items(0x0A, [s.encode("ascii").ljust(20, b"\x00") for s in self.ecu_names])
         return bytes([0x7F, 0x09, 0x31])
+
+    @staticmethod
+    def _info_items(info_type: int, items: List[bytes]) -> bytes:
+        # Mode 09 positive response: [0x49, InfoType, NODI, <NODI fixed-width items>].
+        body = bytes([0x49, info_type, len(items)])
+        for item in items:
+            body += item
+        return body

@@ -26,6 +26,9 @@ MODE_VEHICLE_INFO = 0x09
 MODE_PERMANENT_DTCS = 0x0A
 NEGATIVE_RESPONSE_SID = 0x7F
 VEHICLE_INFO_VIN = 0x02
+VEHICLE_INFO_CALID = 0x04       # calibration ID(s), ASCII, 16-byte items
+VEHICLE_INFO_CVN = 0x06         # calibration verification number(s), 4-byte
+VEHICLE_INFO_ECU_NAME = 0x0A    # ECU name/acronym(s), ASCII, 20-byte items
 
 
 class ObdError(Exception):
@@ -137,3 +140,38 @@ class ObdClient:
         if len(resp) < 3 or resp[1] != VEHICLE_INFO_VIN:
             raise ObdError("Mode 09 echo mismatch")
         return resp[3:].decode("ascii", errors="replace")
+
+    def _read_vehicle_info(self, info_type: int) -> bytes:
+        """Mode 09 <info_type>: return the data payload after the NODI byte."""
+        resp = self._request(bytes([MODE_VEHICLE_INFO, info_type]))
+        # [0x49, info_type, NODI, <NODI fixed-width items>]
+        if len(resp) < 3 or resp[1] != info_type:
+            raise ObdError(f"Mode 09 InfoType 0x{info_type:02X} echo mismatch")
+        return resp[3:]
+
+    @staticmethod
+    def _text_items(data: bytes, item_len: int) -> "list[str]":
+        """Split a Mode 09 payload into fixed-width ASCII items, trimming the
+        null padding each carries; drop empty items."""
+        items = []
+        for i in range(0, len(data), item_len):
+            text = data[i:i + item_len].split(b"\x00", 1)[0].decode("ascii", errors="replace").strip()
+            if text:
+                items.append(text)
+        return items
+
+    def read_calibration_ids(self) -> "list[str]":
+        """Mode 09 InfoType 0x04: the calibration ID(s) — the software level of each
+        calibration, exactly what FORScan/dealers read to confirm module firmware.
+        [NEEDS ON-CAR CHECK] — the decode is spec-verified; the read needs a car."""
+        return self._text_items(self._read_vehicle_info(VEHICLE_INFO_CALID), 16)
+
+    def read_ecu_names(self) -> "list[str]":
+        """Mode 09 InfoType 0x0A: the ECU name/acronym(s), ASCII. [NEEDS ON-CAR CHECK]"""
+        return self._text_items(self._read_vehicle_info(VEHICLE_INFO_ECU_NAME), 20)
+
+    def read_cvns(self) -> "list[str]":
+        """Mode 09 InfoType 0x06: the calibration verification number(s) — a 4-byte
+        checksum per calibration, surfaced as hex. [NEEDS ON-CAR CHECK]"""
+        data = self._read_vehicle_info(VEHICLE_INFO_CVN)
+        return [data[i:i + 4].hex().upper() for i in range(0, len(data) - (len(data) % 4), 4)]

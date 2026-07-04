@@ -76,7 +76,10 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
 Each is buildable + simulator-testable now; every real-car read stays [NEEDS ON-CAR CHECK].
 Build order R1→R2→R3→R6→R4→R5, a review pass interleaved. **When these are done, STOP
 feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and say so plainly.
-- [ ] R1 Mode 09 CALID + CVN (+ ECU name) readout — the "which calibration am I on?" datapoint
+- [~] R1 Mode 09 CALID + CVN (+ ECU name) readout — the "which calibration am I on?" datapoint.
+      ENGINE DONE (iter 49): `ObdClient.read_calibration_ids`/`read_cvns`/`read_ecu_names`
+      (InfoType 0x04/0x06/0x0A, fixed-width item decode) + `SimulatedObdEcu` support + 5 tests.
+      Surfacing (health report / web / CLI) is R1b — next.
 - [ ] R2 Session min/max/avg per live PID (surfaced in the dashboard + health report)
 - [ ] R3 Readiness / drive-cycle coach — generic OBD conditions to complete each not-ready monitor
 - [ ] R6 DTC state separation (confirmed / pending / permanent) with a one-line meaning
@@ -407,3 +410,10 @@ feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and 
   (`max_active == 1`). **All four iter-46 auditor findings now closed.** [The corruption
   itself is NEEDS ON-CAR CHECK — only real hardware exhibits it; the lock is the correct
   guard and is proven to serialize.]
+- **Iter 49** — R1 engine: Mode 09 calibration readout. `ObdClient.read_calibration_ids`
+  (InfoType 0x04, 16-byte ASCII items), `read_cvns` (0x06, 4-byte → hex), `read_ecu_names`
+  (0x0A, 20-byte ASCII) — the "which calibration/firmware am I on?" datapoint FORScan/dealers
+  use to confirm module software level. Fixed-width item decode (split on null padding, drop
+  empties); `SimulatedObdEcu` seeded via `calibration_ids`/`cvns`/`ecu_names` + a `_info_items`
+  helper. +5 tests (single + multi CALID, CVN-as-hex, ECU name, unsupported→raises), RED-first.
+  348 green. Decode is spec-verified; the real read is [NEEDS ON-CAR CHECK]. Surfacing = R1b.
