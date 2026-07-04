@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from ..transport.base import Transport
-from ..isotp.socket import IsoTpSocket
+from ..isotp.socket import IsoTpSocket, IsoTpError
 from ..uds.client import UdsClient, NegativeResponseError, UdsError
 from ..ford.addressing import AddressPair
 
@@ -68,6 +68,8 @@ def scan_module(
             responded = True
         except NegativeResponseError:
             responded = True  # it answered, just not with this DID
+        except IsoTpError:
+            responded = True  # answered, then faulted mid-transfer -> present, keep going
         except UdsError:
             pass  # silence — no evidence the module is here (yet)
     name = pair.name or f"0x{pair.request_id:X}"

@@ -1,8 +1,14 @@
 """Whole-car module scan tests over a multi-module simulated bus."""
 import unittest
 
-from fordscope.transport import SimulatorTransport
-from fordscope.isotp import SimulatedIsoTpEcu, multiplex
+from fordscope.transport import SimulatorTransport, CanFrame
+from fordscope.isotp import (
+    SimulatedIsoTpEcu,
+    multiplex,
+    parse_isotp,
+    IsoTpFrameType,
+    encode_first_frame,
+)
 from fordscope.uds import SimulatedUdsEcu
 from fordscope.ford import eleven_bit_module
 from fordscope.services import scan_vehicle, format_scan_report
@@ -62,6 +68,40 @@ class WholeCarScanTests(unittest.TestCase):
         self.assertIn("1FMHK8D89ABA12345", report)
         self.assertIn("[--] APIM", report)
         self.assertIn("not present", report)
+
+
+def _ff_then_silent(frame):
+    """A module that answers with a First Frame then never sends consecutive
+    frames — reproduces a real bus dropout mid-multi-frame response. Only replies
+    on 0x726."""
+    if frame.arbitration_id != 0x726:
+        return ()
+    pci = parse_isotp(frame.data)
+    if pci.type is IsoTpFrameType.SINGLE:  # the request -> reply with a bare FF
+        return (CanFrame(0x72E, encode_first_frame(20, bytes(range(6)))),)
+    return ()  # ignore the client's Flow Control -> it times out on the CFs
+
+
+class MidTransferFaultTests(unittest.TestCase):
+    def test_isotp_fault_marks_present_and_does_not_abort_scan(self):
+        # BCM answers a FF then goes silent (IsoTpTimeout); ABS is normal.
+        normal_abs = ecu_at(eleven_bit_module(0x760, name="ABS"), {0xF187: b"ABS-9"})
+        bus = SimulatorTransport(multiplex(_ff_then_silent, normal_abs))
+        bus.open()
+        infos = {
+            m.name: m
+            for m in scan_vehicle(
+                bus,
+                [eleven_bit_module(0x726, name="BCM"), eleven_bit_module(0x760, name="ABS")],
+                timeout=0.02,
+            )
+        }
+        # The faulty module must be PRESENT (it answered), scan must NOT abort,
+        # and the normal module must still be reached.
+        self.assertTrue(infos["BCM"].present)
+        self.assertEqual(infos["BCM"].identifiers, {})
+        self.assertTrue(infos["ABS"].present)
+        self.assertEqual(infos["ABS"].text("Spare part number"), "ABS-9")
 
 
 if __name__ == "__main__":

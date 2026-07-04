@@ -1,8 +1,14 @@
 """UDS ReadDTCInformation (0x19) + whole-car DTC aggregation."""
 import unittest
 
-from fordscope.transport import SimulatorTransport
-from fordscope.isotp import SimulatedIsoTpEcu, multiplex
+from fordscope.transport import SimulatorTransport, CanFrame
+from fordscope.isotp import (
+    SimulatedIsoTpEcu,
+    multiplex,
+    parse_isotp,
+    IsoTpFrameType,
+    encode_first_frame,
+)
 from fordscope.uds import (
     UdsClient,
     SimulatedUdsEcu,
@@ -89,6 +95,22 @@ class WholeCarDtcScanTests(unittest.TestCase):
         self.assertEqual(by_name["ABS"].dtcs, [])
         self.assertFalse(by_name["APIM"].present)
         self.assertEqual(total_dtc_count(reports), 1)
+
+    def test_isotp_fault_marks_present_and_does_not_abort(self):
+        def ff_then_silent(frame):
+            if frame.arbitration_id != PCM.request_id:
+                return ()
+            if parse_isotp(frame.data).type is IsoTpFrameType.SINGLE:
+                return (CanFrame(PCM.response_id, encode_first_frame(20, bytes(range(6)))),)
+            return ()  # ignore FC -> client times out mid-multi-frame
+
+        abs_mod = uds_at(ABS, dtcs=[])
+        bus = SimulatorTransport(multiplex(ff_then_silent, abs_mod))
+        bus.open()
+        reports = {r.name: r for r in scan_vehicle_dtcs(bus, [PCM, ABS], timeout=0.02)}
+        self.assertTrue(reports["PCM"].present)   # answered a FF -> present
+        self.assertEqual(reports["PCM"].dtcs, [])
+        self.assertTrue(reports["ABS"].present)   # scan continued, not aborted
 
     def test_report_includes_descriptions(self):
         reports = scan_vehicle_dtcs(self.bus, [PCM, ABS, APIM_ABSENT], timeout=0.1)

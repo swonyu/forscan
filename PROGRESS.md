@@ -227,6 +227,14 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   `Ran 260 tests … OK`. **The entire phased plan (Phases 1–3 + tooling) is now complete.**
 
 ## Post-plan polish
+- **Iter 27** — Completed adversarial review coverage (CLI + scan services, the last un-reviewed
+  logic). **1 more real bug found & fixed test-first** (268 total green): `scan_module` /
+  `scan_module_dtcs` only caught `UdsError`, but `IsoTpSocket` raises a separate `IsoTpError`
+  hierarchy — so a module that answered then dropped a frame mid-multi-frame (real bus noise on a
+  VIN read) aborted the WHOLE scan (exit 3) instead of being marked present-and-continuing. Fixed:
+  catch `IsoTpError` in both walkers. Reviewer verified the As-Built safety gates are sound (live
+  write can't escape to a real car; dry-run never writes; backup-before-write holds; exit codes
+  correct). **Entire codebase now adversarially reviewed; 4 real bugs found+fixed across 2 rounds.**
 - **Iter 26** — Adversarial code review (2 independent reviewers over the logic-heavy files) →
   **3 real correctness bugs found & fixed test-first** (each: failing test reproduced the crash,
   then fixed, 266 total green):

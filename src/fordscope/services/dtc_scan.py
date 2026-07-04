@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import List, Sequence
 
 from ..transport.base import Transport
+from ..isotp.socket import IsoTpError
 from ..uds.client import NegativeResponseError, UdsError
 from ..uds.dtc import UdsDtc
 from ..ford.addressing import AddressPair
@@ -32,6 +33,9 @@ def scan_module_dtcs(client, pair: AddressPair) -> ModuleDtcReport:
         return ModuleDtcReport(name, pair.request_id, True, dtcs)
     except NegativeResponseError:
         # module answered but doesn't support 0x19 / has none -> present, no dtcs
+        return ModuleDtcReport(name, pair.request_id, True, [])
+    except IsoTpError:
+        # answered then faulted mid-transfer -> present, no dtcs (don't abort the walk)
         return ModuleDtcReport(name, pair.request_id, True, [])
     except UdsError:
         # silence -> not on this vehicle
