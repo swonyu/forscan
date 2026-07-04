@@ -805,6 +805,18 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   Left PROGRESS.md's per-iteration historical counts (102/114/…/254) UNTOUCHED — those are the frozen
   log of what was true at each iteration, correct as history. Repo-wide re-grep clean of stale hard
   counts. Docs-only; 426 green.
+- **Iter 108** (Phase-4 gap found by pushing past a hold — GUI real-adapter connect untested) —
+  Pressed harder on the recurring "native macOS GUI for the Vgate vLinker FS" instead of holding a
+  third time. The `.app` launcher is a 12-line trampoline (logic tested via `run()`), so nothing there.
+  But it pointed at a REAL gap: the controller's `connect()` has two branches — DEMO→simulator (well
+  tested) and non-DEMO→`open_backend("elm327")` (the vLinker-FS path, the whole point of the GUI) —
+  and EVERY webapp test used `connect(DEMO_PORT)`. The real-adapter branch was untested at the webapp
+  layer. Verified the behavior empirically (fake silent serial → `connected=True`, banner
+  `-- LIVE VEHICLE via elm327 :: UNVALIDATED backend (NEEDS ON-CAR CHECK) --`), then added
+  `test_connect_real_port_uses_elm327_and_shows_unvalidated_banner`: locks that a non-demo connect
+  builds the real `Elm327Transport` AND surfaces the honest UNVALIDATED/NEEDS-ON-CAR banner, never
+  `SIMULATED` — the safety property that a user on a real adapter is not misled into trusting an
+  unvalidated live path. No hardware needed. +1 test → **427 green**.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the

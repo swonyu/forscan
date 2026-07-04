@@ -29,6 +29,33 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(c.read_pid(0x0C)["value"], 1000.0)
         self.assertTrue(c.vin())
 
+    def test_connect_real_port_uses_elm327_and_shows_unvalidated_banner(self):
+        # The Phase-4 point of the GUI is driving the real Vgate vLinker FS. Connecting
+        # a NON-demo port must route through the elm327 backend AND surface the honest
+        # UNVALIDATED / NEEDS-ON-CAR banner (never the SIMULATED one) -- so a user on a
+        # real adapter is never misled into trusting an unvalidated live path. Uses a
+        # fake serial (silent bus) so no hardware is needed. Webapp-layer analog of the
+        # CLI's elm327 test, but guarding the banner the GUI actually shows.
+        class FakeSerial:
+            def write(self, d):
+                return len(d)
+
+            def read(self, n=1):
+                return b""  # silent bus: elm327 open() completes immediately
+
+            def close(self):
+                pass
+
+        c = FordScopeController(port_factory=lambda _name: FakeSerial())
+        banner = c.connect("/dev/cu.usbserial-VLINKER")
+        self.assertTrue(c.connected)
+        self.assertIn("elm327", banner)
+        self.assertIn("UNVALIDATED", banner)
+        self.assertIn("NEEDS ON-CAR CHECK", banner)
+        self.assertNotIn("SIMULATED", banner)   # must NOT masquerade as the simulator
+        from fordscope.transport import Elm327Transport
+        self.assertIsInstance(c.transport, Elm327Transport)  # the real backend, not sim
+
     def test_command_before_connect_raises(self):
         with self.assertRaises(NotConnectedError):
             FordScopeController().scan()
