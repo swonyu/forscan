@@ -59,6 +59,15 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
       + `SimulatedUdsEcu` transfer (reassembly, wrongBlockSequenceCounter, sequence errors).
       PROTOCOL ONLY — no calibration files, no CLI exposure; real reflash needs FDRS keys/data.
 
+## Phase 4 — Native macOS app (no Windows VM) — owner request
+- [x] 4.G Local web app (`fordscope/webapp/`): stdlib `http.server` JSON API + one embedded page,
+      `python -m fordscope.webapp`. Testable `FordScopeController` (list ports, connect via
+      `open_backend`, scan/dtc/read/vin) + thin server. Connects to a real USB adapter (Vgate
+      vLinker FS via the elm327 backend) so diagnostics run native on macOS — no FORScan/Windows VM.
+      Demo (simulator) path fully functional + tested; real serial is NEEDS ON-CAR CHECK. Scope: it's
+      a native DIAGNOSTICS app, not a full FORScan As-Built replacement (maps unverified).
+- [ ] 4.1 (later) package as a double-clickable .app (py2app/pyinstaller); live-data dashboard view.
+
 ## Tooling
 - [x] `fordscope-build` skill (`.claude/skills/`) + project `CLAUDE.md`
 - [x] `ford/fusion_2016.py` — 2016 Fusion S profile from a 7-agent adversarially-verified research
@@ -227,6 +236,13 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   `Ran 260 tests … OK`. **The entire phased plan (Phases 1–3 + tooling) is now complete.**
 
 ## Post-plan polish
+- **Iter 28** — Phase 4: native macOS web app (`fordscope/webapp/`) so the owner drives the
+  Vgate vLinker FS directly, no Windows VM. `FordScopeController` (reuses `open_backend`) +
+  stdlib `http.server` JSON API + embedded page; `python -m fordscope.webapp`. +8 tests
+  (controller + HTTP-over-real-sockets: connect→scan→read→vin, 409-before-connect). **Gotcha
+  found & fixed:** `import webbrowser` at module top hung ~35s/test under the `-m unittest` runner
+  on macOS — made it lazy (only in `run()`); suite back to 2.0s. Tkinter unavailable here, so a
+  browser UI was the right, portable, testable choice. 276 total, `Ran 276 tests … OK`.
 - **Iter 27** — Completed adversarial review coverage (CLI + scan services, the last un-reviewed
   logic). **1 more real bug found & fixed test-first** (268 total green): `scan_module` /
   `scan_module_dtcs` only caught `UdsError`, but `IsoTpSocket` raises a separate `IsoTpError`
