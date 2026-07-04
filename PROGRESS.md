@@ -714,6 +714,18 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   **introspects the real argparse choices** (a hardcoded list would drift identically) and asserts
   each is handled. Proved the guard's teeth first: `open_backend('openport', …)` raises `unknown
   backend 'openport'`, so an unhandled choice fails the test. +1 test → **417 green**.
+- **Iter 100** (ISO-TP wraparound coverage — a real untested correctness property) — Audited the
+  ISO-TP layer (`frames.py` codec + `socket.py` reassembly/streaming): both solid — SN starts at 1,
+  wraps `& 0x0F` on send AND recv, padding trimmed via `[:total-len]`, WAIT bounded, reserved
+  FlowStatus aborts. BUT the whole suite's largest message was 30 bytes (4 CFs); **nothing crossed
+  the 4-bit SN wrap at 15→0** (needs >111 bytes = FF's 6 + 15×7), even though real Ford As-Built
+  `ReadDataByIdentifier` blocks and long DTC lists routinely exceed it. Added
+  `test_sequence_number_wraps_past_15_both_directions`: round-trips a 163-byte request (send-side
+  wrap in `_stream_cfs`) AND a 183-byte response (recv-side wrap in `_reassemble`), asserting the
+  response reassembles byte-exact, the emitted CF sequence numbers are exactly `1,2,…,15,0,1,…`, and
+  the request frames reassemble to the exact bytes sent. Proved teeth BY MEASUREMENT (not argument):
+  neutralized the mask in a throwaway process — send-side raises `CF sequence number must be 0..15,
+  got 16`, recv-side raises `IsoTpSequenceError` (expected_sn 16 vs on-wire 0). +1 test → **418 green**.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the

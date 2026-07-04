@@ -48,6 +48,15 @@ def reassemble_client_frames(frames):
     return bytes(out[:total]) if total is not None else bytes(out)
 
 
+def cf_sequence_numbers(frames):
+    """The 4-bit sequence number of each CONSECUTIVE frame the client emitted."""
+    return [
+        parse_isotp(f.data).sequence_number
+        for f in frames
+        if parse_isotp(f.data).type is IsoTpFrameType.CONSECUTIVE
+    ]
+
+
 class StminTests(unittest.TestCase):
     def test_millisecond_range(self):
         self.assertEqual(stmin_to_seconds(0x00), 0.0)
@@ -167,6 +176,28 @@ class RoundTripTests(unittest.TestCase):
         long_req = bytes([0x2E]) + bytes(range(19))  # 20 bytes
         sock.send(long_req)
         self.assertEqual(sock.recv(), long_resp)
+
+    def test_sequence_number_wraps_past_15_both_directions(self):
+        # The 4-bit CF sequence number wraps 15 -> 0. That only happens on messages
+        # longer than ~111 bytes (FF's 6 + 15 CFs x 7), and NOTHING else in the suite
+        # crosses that boundary -- yet real Ford As-Built ReadDataByIdentifier blocks
+        # and long DTC lists routinely do. Round-trip a long request (exercises the
+        # send-side wrap in _stream_cfs) AND a long response (exercises the recv-side
+        # wrap in _reassemble). A broken mask fails LOUDLY: send would call
+        # encode_consecutive_frame(16, ...) -> ValueError; recv would raise
+        # IsoTpSequenceError when its expected_sn (16) meets the on-wire SN (0).
+        long_resp = bytes([0x62, 0xF1, 0x90]) + bytes(range(180))   # 183 B -> 26 CFs
+        sock, _ecu, bus = make_pair(lambda req: long_resp)
+        long_req = bytes([0x2E, 0xF1, 0x90]) + bytes(range(160))    # 163 B -> 23 CFs
+        sock.send(long_req)
+        # recv-side wrap: the long response reassembles byte-exact across 15 -> 0.
+        self.assertEqual(sock.recv(), long_resp)
+        # send-side wrap: emitted CF sequence numbers are exactly 1,2,...,15,0,1,...
+        sns = cf_sequence_numbers(bus.sent)
+        self.assertGreater(len(sns), 16, "payload must need >16 CFs to cross the wrap")
+        self.assertEqual(sns, [(i + 1) & 0x0F for i in range(len(sns))])
+        # and those frames still reassemble to the exact request that was sent.
+        self.assertEqual(reassemble_client_frames(bus.sent), long_req)
 
     def test_recv_returns_none_on_silent_bus(self):
         sock, _ecu, _bus = make_pair(lambda req: None)
