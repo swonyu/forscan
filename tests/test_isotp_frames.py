@@ -97,6 +97,13 @@ class FirstFrameTests(unittest.TestCase):
         self.assertIs(pci.type, IsoTpFrameType.FIRST)
         self.assertEqual(pci.length, 8)
 
+    def test_parse_rejects_truncated_ff_short_first_data(self):
+        # A First Frame must carry the full 6 first-data bytes; a short FF payload
+        # is malformed and must be rejected (mirroring SF's truncation guard), not
+        # silently accepted with fewer bytes than the wire shape requires.
+        with self.assertRaises(ValueError):
+            parse_isotp(bytes([0x10, 0x0A, 0xAA]))  # total 10 (valid) but only 1 data byte
+
 
 class ConsecutiveFrameTests(unittest.TestCase):
     def test_encode_sequence_and_data(self):

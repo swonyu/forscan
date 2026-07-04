@@ -171,6 +171,10 @@ def parse_isotp(payload: bytes) -> IsoTpPci:
                 f"(lengths 1..{SF_MAX_DATA} must use a Single Frame)"
             )
         first = payload[2 : 2 + FF_FIRST_DATA]
+        if len(first) < FF_FIRST_DATA:
+            raise ValueError(
+                f"FF truncated: {len(first)} first-data bytes, expected {FF_FIRST_DATA}"
+            )
         return IsoTpPci(IsoTpFrameType.FIRST, data=bytes(first), length=total)
 
     if ftype is IsoTpFrameType.CONSECUTIVE:
