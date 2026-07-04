@@ -11,8 +11,9 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
 
 ## Phase 1 — Diagnostics foundation (Tiers 0–3)
 - [x] 0.1 Transport abstraction: `CanFrame` + `Transport` ABC + `SimulatorTransport`
-- [ ] 0.2 Real backends behind the same ABC — DEFERRED (device I/O is [NEEDS ON-CAR CHECK];
-      the slcan ASCII codec is testable and will land as a unit before wiring real serial)
+- [~] 0.2 Real backends behind the same ABC — `SlcanTransport` (`transport/slcan.py`): wire
+      codec (encode/parse, Ford 500k/125k bitrates) + command sequencing fully tested over an
+      injected port. Real serial-port timing/quirks still [NEEDS ON-CAR CHECK]; Openport backend TODO.
 - [x] 1.1a ISO-TP frame codec: SF/FF/CF/FC encode + parse (pure, hand-derived fixtures)
 - [x] 1.1b ISO-TP transport layer: `IsoTpSocket` send/recv + flow control; `SimulatedIsoTpEcu`
       (reusable simulated endpoint). BS=0 both ways; client send honours ECU block-size>0.
@@ -147,3 +148,10 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   `EXAMPLE_FEATURES` (fog-DRL / gauge-sweep / double-honk) shipped explicitly UNVERIFIED. +8 tests
   incl. a full set→verify→restore and an honesty test that FAILS if any example lacks the
   UNVERIFIED flag (173 total, `Ran 173 tests … OK`). **Phase 2 As-Built core complete.**
+- **Iter 15** — slcan hardware backend (`transport/slcan.py`, deferred 0.2). Pure wire codec:
+  `encode_frame`/`parse_frame` (standard `t...` + extended `T...` lines), `bitrate_command`
+  (Ford HS-CAN 500k=S6 / MS-CAN 125k=S4). `SlcanTransport` over a duck-typed serial port —
+  open sends `S6\rO\r`, send/recv encode/parse, skips status/ack lines. +17 tests over a
+  FakeSerial (codec round-trip, command sequencing, status-line skipping). Real serial timing
+  still NEEDS ON-CAR CHECK. This is the bridge to a real ~$30 CANable adapter. (190 total,
+  `Ran 190 tests … OK`). Next: wire `--backend slcan` in the CLI (still refusing until on-car).

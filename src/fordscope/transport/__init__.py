@@ -15,6 +15,12 @@ from .simulator import (
     echo_responder,
     canned_obd_responder,
 )
+from .slcan import (
+    SlcanTransport,
+    encode_frame,
+    parse_frame,
+    bitrate_command,
+)
 
 __all__ = [
     "CanFrame",
@@ -28,4 +34,8 @@ __all__ = [
     "null_responder",
     "echo_responder",
     "canned_obd_responder",
+    "SlcanTransport",
+    "encode_frame",
+    "parse_frame",
+    "bitrate_command",
 ]
