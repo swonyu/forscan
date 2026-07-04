@@ -88,7 +88,12 @@ feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and 
       returns confirmed/pending/permanent groups, each with a plain-language meaning + described
       codes; `GET /api/dtc-states`. The emissions/inspection view (distinct from the UDS per-module
       `dtc()` scan) — surfaces the pending-vs-permanent distinction that explains "why codes come back."
-- [ ] R4 Live PID graphing (inline SVG sparklines) in the web UI
+- [x] R4 Live PID graphing (iter 83): per-PID rolling history (last 40 samples) + an inline SVG
+      polyline sparkline column in the live dashboard, reset on Start. Verified by RUNNING: the
+      sparkline math in node (rising orients correctly, empty/single→no line, flat→div-0-safe,
+      null→baseline), a live end-to-end smoke test (connect→poll→rows carry pid+value), and a
+      structural test that the served page wires it. Visual pixels are well-formed SVG (node-
+      confirmed); a literal browser eyeball is the one un-automated sliver [owner/preview].
 - [ ] R5 Mode 06 on-board monitoring test results (generic decode; TID meanings OEM — not invented)
 
 ## Tooling
@@ -595,3 +600,11 @@ and the dangerous parts are clean. **The real remaining risk-reduction is the on
 gated — not audit round 9.** Residual (honest): the 8th run's 2 dropped dims were audited clean/fixed
 in runs 6/7; a future maintainer wanting a fully-complete final pass can re-run the saved workflow.
 NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, neglected since iter 52.
+
+## Back to features
+- **Iter 83** — **R4 shipped** (first feature since iter 52): live PID graphing. Per-PID rolling
+  history (40 samples) + an inline SVG sparkline column in the live dashboard, reset on Start;
+  numeric values orient correctly (max→top), flat/empty/null handled. Verified by RUNNING (node
+  logic across 5 cases + a live end-to-end smoke test + a structural page test), not by claim. +1
+  test. 396 green. Meanwhile the R3/R5 diagnostic-research re-run (Sonnet-max, 4 angles) is in flight
+  to unblock those features.

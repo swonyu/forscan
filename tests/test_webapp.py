@@ -253,6 +253,16 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn("FordScope", raw.decode())
 
+    def test_index_page_has_live_sparkline_feature(self):
+        # R4: the served page wires the per-PID live sparkline (history + inline SVG
+        # polyline). The sparkline math itself is verified by running (node); this
+        # locks that the feature is present in the shipped page.
+        _s, raw = self._req("GET", "/")
+        html = raw.decode()
+        self.assertIn("function sparkline(", html)
+        self.assertIn("<polyline", html)
+        self.assertIn("liveHistory", html)
+
     def test_ports_endpoint(self):
         _s, j = self._json("GET", "/api/ports")
         self.assertIn(DEMO_PORT, j["ports"])

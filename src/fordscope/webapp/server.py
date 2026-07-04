@@ -105,13 +105,20 @@ async function clearDtc(){
  if(j.banner)setBanner(j.banner);
  document.getElementById('out').textContent=j.ok?'Trouble codes cleared.':(j.error||'error');}
 let liveTimer=null;
+let liveHistory={};
+function sparkline(vals){const w=120,h=24,n=vals.length;if(n<2)return '';
+ const nums=vals.filter(v=>typeof v==='number');if(nums.length<2)return '';
+ const lo=Math.min(...nums),hi=Math.max(...nums),span=(hi-lo)||1;
+ const pts=vals.map((v,i)=>{const x=(i/(n-1))*w;const y=typeof v==='number'?h-((v-lo)/span)*h:h;return x.toFixed(1)+','+y.toFixed(1);}).join(' ');
+ return '<svg class="spark" width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none"><polyline fill="none" stroke="#c0392b" stroke-width="1.5" points="'+pts+'"/></svg>';}
 async function pollLive(){const pids=document.getElementById('livepids').value;
  const r=await fetch('/api/live?pids='+encodeURIComponent(pids));const j=await r.json();
  const t=document.getElementById('live');
  if(j.error){t.innerHTML='<tr><td>'+j.error+'</td></tr>';stopLive();return;}
  if(j.banner)setBanner(j.banner);
- t.innerHTML=(j.rows||[]).map(x=>'<tr><td>'+x.name+'</td><td>'+(x.value==null?'—':x.value+' '+x.unit)+'</td></tr>').join('');}
-function startLive(){stopLive();pollLive();liveTimer=setInterval(pollLive,1000);}
+ (j.rows||[]).forEach(x=>{const k=x.pid;if(!(k in liveHistory))liveHistory[k]=[];const hh=liveHistory[k];hh.push(typeof x.value==='number'?x.value:null);if(hh.length>40)hh.shift();});
+ t.innerHTML=(j.rows||[]).map(x=>'<tr><td>'+x.name+'</td><td>'+(x.value==null?'—':x.value+' '+x.unit)+'</td><td>'+sparkline(liveHistory[x.pid]||[])+'</td></tr>').join('');}
+function startLive(){stopLive();liveHistory={};pollLive();liveTimer=setInterval(pollLive,1000);}
 function stopLive(){if(liveTimer){clearInterval(liveTimer);liveTimer=null;}}
 function downloadLog(){const pids=document.getElementById('livepids').value;
  const n=document.getElementById('logsamples').value;
