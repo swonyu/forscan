@@ -33,9 +33,10 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
       checking. SAFETY: actuates real hardware; simulator-tested only, on-car use is NEEDS ON-CAR CHECK
 - [x] 3.2 Whole-car DTC report (`services/dtc_scan.py`): UDS ReadDTCInformation (0x19) per module,
       aggregated + described (via DTC DB) + present/absent; `format_dtc_report`, `total_dtc_count`
-- [x] 3.3 CLI (`fordscope/cli.py`, `python -m fordscope`): scan / dtc / read <pid> / vin / clear-dtc
-      against a simulated demo vehicle; real backends refuse honestly. (live dashboard + CSV/SQLite
-      logging deferred as optional follow-up — core CLI shipped)
+- [x] 3.3 CLI (`fordscope/cli.py`, `python -m fordscope`): scan / dtc / read <pid> / vin / clear-dtc.
+      `--backend simulator|slcan|elm327` + `--port`; live backends construct a real transport
+      (LIVE UNVALIDATED banner) via pyserial or an injectable port_factory. (dashboard + logging
+      deferred as optional follow-up)
 
 ## Phase 2 — As-Built coding (Tier 4)
 - [x] 4.1 Backup-before-write engine (`ford/asbuilt.py`): `AsBuiltCoder` refuses writes without a
@@ -162,3 +163,10 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   read-until-`>` recv. +14 tests over a FakeSerial. Live device timing / 29-bit / multi-frame FC
   in raw mode = NEEDS ON-CAR CHECK. One fixture bug self-caught: a 7-byte "8-byte" frame line —
   fixed the fixture, not the assertion (204 total, `Ran 204 tests … OK`).
+- **Iter 17** — Wired backends into the CLI. `--backend simulator|slcan|elm327` + `--port`;
+  `open_backend` factory builds the demo (SIMULATED banner) or a live `SlcanTransport`/
+  `Elm327Transport` (LIVE UNVALIDATED / NEEDS ON-CAR CHECK banner) via pyserial or an injectable
+  `port_factory`. Live modules = `TYPICAL_FORD_MODULES` (non-authoritative). +5 net tests (injected
+  fake-port live run, factory construction, missing-port + missing-pyserial error paths). Verified
+  by running: simulator works, both live error paths clean (209 total, `Ran 209 tests … OK`).
+  Software is now plug-in-ready; the only gap to a real truck is validating the serial path on-car.

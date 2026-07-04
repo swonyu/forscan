@@ -13,11 +13,11 @@ import argparse
 import sys
 from typing import List, Optional, Tuple
 
-from .transport import SimulatorTransport
+from .transport import SimulatorTransport, SlcanTransport, Elm327Transport
 from .isotp import IsoTpSocket, SimulatedIsoTpEcu, multiplex
 from .obd import SimulatedObdEcu, ObdClient
 from .uds import SimulatedUdsEcu, UdsDtc, STATUS_CONFIRMED
-from .ford import eleven_bit_module, AddressPair
+from .ford import eleven_bit_module, AddressPair, TYPICAL_FORD_MODULES
 from .services import (
     scan_vehicle,
     format_scan_report,
@@ -26,6 +26,7 @@ from .services import (
 )
 
 BANNER = "-- SIMULATED VEHICLE (no hardware attached) --"
+LIVE_BANNER = "-- LIVE VEHICLE via {backend} :: UNVALIDATED backend (NEEDS ON-CAR CHECK) --"
 DEMO_VIN = "1FMHK8D89ABA12345"
 _OBD_MODES = set(range(0x01, 0x0B))
 
@@ -79,7 +80,45 @@ def build_demo_vehicle() -> Tuple[SimulatorTransport, List[AddressPair]]:
     return bus, modules
 
 
-def _obd_client(bus: SimulatorTransport) -> ObdClient:
+def default_modules() -> List[AddressPair]:
+    """Typical Ford module list for a live scan (addresses are non-authoritative)."""
+    return [eleven_bit_module(addr, name=name) for name, addr in TYPICAL_FORD_MODULES.items()]
+
+
+def _open_serial(port_name: str):
+    """Open a real serial port via pyserial (only reached on a live backend)."""
+    try:
+        import serial  # pyserial
+    except ImportError as exc:  # pragma: no cover - environment-dependent
+        raise RuntimeError(
+            "a live backend needs pyserial: pip install pyserial"
+        ) from exc
+    return serial.Serial(port_name, baudrate=115200, timeout=1.0)
+
+
+def open_backend(backend: str, port, *, port_factory=None):
+    """Return (transport, modules, banner) for the chosen backend.
+
+    port_factory lets tests inject a fake serial port; production uses pyserial.
+    """
+    if backend == "simulator":
+        bus, modules = build_demo_vehicle()
+        return bus, modules, BANNER
+    if port is None:
+        raise ValueError(f"--port is required for the '{backend}' backend")
+    opener = port_factory or _open_serial
+    serial_port = opener(port)
+    if backend == "slcan":
+        transport = SlcanTransport(serial_port)
+    elif backend == "elm327":
+        transport = Elm327Transport(serial_port)
+    else:  # pragma: no cover - argparse restricts choices
+        raise ValueError(f"unknown backend {backend!r}")
+    transport.open()
+    return transport, default_modules(), LIVE_BANNER.format(backend=backend)
+
+
+def _obd_client(bus) -> ObdClient:
     return ObdClient(IsoTpSocket(bus, tx_id=0x7E0, rx_id=0x7E8))
 
 
@@ -90,8 +129,14 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--backend",
         default="simulator",
-        choices=["simulator", "slcan", "openport"],
-        help="hardware backend (only 'simulator' is implemented)",
+        choices=["simulator", "slcan", "elm327"],
+        help="transport backend (default: simulator; slcan/elm327 need --port and are "
+        "UNVALIDATED on real hardware)",
+    )
+    parser.add_argument(
+        "--port",
+        default=None,
+        help="serial device for a live backend, e.g. /dev/tty.usbserial-XXXX",
     )
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("scan", help="whole-car module identification scan")
@@ -103,44 +148,46 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: Optional[List[str]] = None, *, port_factory=None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
-
-    if args.backend != "simulator":
-        print(
-            f"error: hardware backend '{args.backend}' is not implemented yet. "
-            f"Only the simulator is available; a real backend must be written and "
-            f"validated on-car first (see PROGRESS.md).",
-            file=sys.stderr,
-        )
-        return 2
 
     if not args.command:
         parser.print_help()
         return 1
 
-    bus, modules = build_demo_vehicle()
+    try:
+        bus, modules, banner = open_backend(args.backend, args.port, port_factory=port_factory)
+    except Exception as exc:  # bad backend / missing port / serial open failed
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
     try:
         if args.command == "scan":
-            print(BANNER)
+            print(banner)
             print(format_scan_report(scan_vehicle(bus, modules)))
         elif args.command == "dtc":
-            print(BANNER)
+            print(banner)
             print(format_dtc_report(scan_vehicle_dtcs(bus, modules)))
         elif args.command == "read":
             pid = int(args.pid, 16)
             result = _obd_client(bus).current_data(pid)
-            print(BANNER)
+            print(banner)
             print(f"{result.name}: {result.value} {result.unit}")
         elif args.command == "vin":
-            print(BANNER)
+            print(banner)
             print(f"VIN: {_obd_client(bus).read_vin()}")
         elif args.command == "clear-dtc":
             _obd_client(bus).clear_dtcs()
-            print(BANNER)
-            print("DTCs cleared (simulated).")
+            print(banner)
+            print("DTCs cleared.")
     except Exception as exc:  # surface a clean message, non-zero exit
         print(f"error: {exc}", file=sys.stderr)
         return 3
+    finally:
+        if args.backend != "simulator":
+            try:
+                bus.close()
+            except Exception:
+                pass
     return 0
