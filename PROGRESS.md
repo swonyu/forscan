@@ -309,6 +309,11 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   → another leaked handle → "device busy") — wrapped construction+open in try/except that closes
   the port before re-raising. Reviewer verified the rest sound: no handler-hang paths, 409 mapping
   correct, all responses JSON-safe. Running tally: **6 real bugs found+fixed across 3 review rounds.**
+- **Iter 41** — First-run support. `fordscope ports` command + `list_serial_ports()` (globs
+  /dev/cu.* minus noise) so the owner can discover the vLinker FS device; webapp `list_ports`
+  DRY'd to reuse it. `FIRST_RUN.md`: accurate on-car first-connection guide (find port → elm327
+  scan/vin → the Mac app), commands verified vs `--help`, with the LIVE-UNVALIDATED framing and
+  troubleshooting. +2 tests. 326 total, `Ran 326 tests … OK`.
 - **Iter 27** — Completed adversarial review coverage (CLI + scan services, the last un-reviewed
   logic). **1 more real bug found & fixed test-first** (268 total green): `scan_module` /
   `scan_module_dtcs` only caught `UdsError`, but `IsoTpSocket` raises a separate `IsoTpError`

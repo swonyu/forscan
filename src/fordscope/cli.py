@@ -110,6 +110,18 @@ def build_demo_vehicle() -> Tuple[SimulatorTransport, List[AddressPair]]:
     return bus, modules
 
 
+_PORT_NOISE = ("Bluetooth-Incoming", "debug-console")
+
+
+def list_serial_ports() -> List[str]:
+    """Candidate serial adapter devices on macOS (/dev/cu.* minus obvious non-adapters)."""
+    import glob
+    return [
+        p for p in sorted(glob.glob("/dev/cu.*"))
+        if not any(n in p for n in _PORT_NOISE)
+    ]
+
+
 def default_modules() -> List[AddressPair]:
     """Typical Ford module list for a live scan (addresses are non-authoritative)."""
     return [eleven_bit_module(addr, name=name) for name, addr in TYPICAL_FORD_MODULES.items()]
@@ -232,6 +244,7 @@ def _build_parser() -> argparse.ArgumentParser:
     read_p.add_argument("pid", help="PID in hex, e.g. 0C for engine RPM")
     sub.add_parser("vin", help="read the vehicle VIN")
     sub.add_parser("clear-dtc", help="clear stored DTCs")
+    sub.add_parser("ports", help="list connected serial adapters (for --port)")
     sub.add_parser("features", help="list built-in As-Built features (EXAMPLE/UNVERIFIED)")
     rf = sub.add_parser("read-feature", help="read a feature's current setting")
     rf.add_argument("key", help="feature key, e.g. fog_drl")
@@ -257,7 +270,17 @@ def main(argv: Optional[List[str]] = None, *, port_factory=None) -> int:
         parser.print_help()
         return 1
 
-    # 'features' is a static listing — no vehicle needed.
+    # 'ports' and 'features' are static listings — no vehicle needed.
+    if args.command == "ports":
+        ports = list_serial_ports()
+        if ports:
+            print("Serial adapters (use one with --port):")
+            for p in ports:
+                print("  " + p)
+        else:
+            print("No serial adapters found. Plug in your OBD adapter (e.g. Vgate vLinker FS) "
+                  "and re-run. A CH340-based adapter may need its macOS driver installed.")
+        return 0
     if args.command == "features":
         print_features()
         return 0

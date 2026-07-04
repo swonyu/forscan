@@ -105,6 +105,16 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 3)
         self.assertIn("error", err.lower())
 
+    def test_ports_command_runs(self):
+        code, out, _ = run("ports")
+        self.assertEqual(code, 0)
+        # either lists adapters or says none found
+        self.assertTrue("adapter" in out.lower() or "serial" in out.lower())
+
+    def test_list_serial_ports_returns_list(self):
+        from fordscope.cli import list_serial_ports
+        self.assertIsInstance(list_serial_ports(), list)
+
     def test_features_lists_examples_as_unverified(self):
         code, out, _ = run("features")
         self.assertEqual(code, 0)

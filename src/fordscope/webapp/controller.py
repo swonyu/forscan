@@ -7,10 +7,9 @@ identical to the terminal tool.
 """
 from __future__ import annotations
 
-import glob
 from typing import List, Optional
 
-from ..cli import open_backend
+from ..cli import open_backend, list_serial_ports
 from ..isotp import IsoTpSocket
 from ..obd import ObdClient, ObdError, PID_TABLE
 
@@ -28,16 +27,11 @@ from ..services import (
 )
 
 DEMO_PORT = "Demo (simulator)"
-_NOISE = ("Bluetooth-Incoming", "debug-console")
 
 
 def list_ports() -> List[str]:
     """Selectable ports: the demo simulator plus real /dev/cu.* serial devices."""
-    real = [
-        p for p in sorted(glob.glob("/dev/cu.*"))
-        if not any(n in p for n in _NOISE)
-    ]
-    return [DEMO_PORT] + real
+    return [DEMO_PORT] + list_serial_ports()
 
 
 class NotConnectedError(RuntimeError):
