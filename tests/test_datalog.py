@@ -4,7 +4,7 @@ import tempfile
 import unittest
 
 from fordscope.transport import SimulatorTransport
-from fordscope.isotp import IsoTpSocket, SimulatedIsoTpEcu
+from fordscope.isotp import IsoTpSocket, SimulatedIsoTpEcu, IsoTpError
 from fordscope.obd import SimulatedObdEcu, ObdClient
 from fordscope.services import DataLogger, rows_to_csv, write_csv_file, column_header
 
@@ -83,6 +83,22 @@ class CsvTests(unittest.TestCase):
                 content = fh.read()
             self.assertIn("Engine RPM (rpm)", content)
             self.assertIn("1000.0", content)
+
+
+class NoisyBusTests(unittest.TestCase):
+    def test_sample_blanks_pid_on_malformed_frame_not_aborts(self):
+        # Bus NOISE -> a malformed ISO-TP frame -> IsoTpError during a read. That must
+        # blank that cell (like an unsupported PID), NOT abort the whole sample/log.
+        # IsoTpError is a different hierarchy than ObdError, so it was slipping past the
+        # DataLogger's per-PID catch (sibling of the iter-115 controller fix).
+        class NoisyClient:
+            def current_data(self, pid):
+                raise IsoTpError("malformed ISO-TP frame: bus noise")
+
+        logger = DataLogger(NoisyClient(), [0x0C, 0x05])
+        row = logger.sample()  # must NOT raise
+        self.assertIsNone(row.values[0x0C])
+        self.assertIsNone(row.values[0x05])
 
 
 if __name__ == "__main__":

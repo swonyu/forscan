@@ -893,6 +893,17 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   `_safe`, freeze) so bus noise degrades exactly like an unsupported read everywhere. Caught my OWN
   `replace_all` miss — line 175 (`read_pid`, different indent) wasn't updated by the bulk edit; grep
   verification (5≠6) surfaced it, fixed it. +1 test → **437 green**.
+- **Iter 116** (systematic sweep of the iter-115 bug class — DataLogger sibling) — Treated iter 115 as
+  a PATTERN, not a one-off: swept every `except .*(ObdError|UdsError|IsoTpError)` site in the codebase
+  for a missing sibling hierarchy. Found the exact same gap in `services/datalog.py`: `DataLogger.sample()`
+  caught `(ObdError, KeyError, ValueError)` but not `IsoTpError`, so a malformed frame (bus noise)
+  during logging would abort the WHOLE sample/run — and the DataLogger backs BOTH the CLI `log` command
+  and the webapp CSV export. Added `IsoTpError` (RED test first: `NoisyClient.current_data` raising
+  IsoTpError aborted `sample()`; GREEN blanks the cell). The `dtc_scan`/`module_scan` UDS sites already
+  catch `IsoTpError`+`UdsError` (complete). Left `obd/client.py:142` (`read_supported_pids` `except
+  ObdError: break`) deliberately unchanged — a corrupt frame there is a genuine truncate-vs-propagate
+  judgment call, and the outer layer handles the leak; changing it blindly could silently truncate the
+  PID list. +1 test → **438 green**.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the

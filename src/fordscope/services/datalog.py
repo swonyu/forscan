@@ -14,6 +14,7 @@ from typing import Callable, Dict, List, Optional, Sequence
 
 from ..obd.pids import PID_TABLE, PidResult
 from ..obd.client import ObdError
+from ..isotp import IsoTpError
 
 
 @dataclass
@@ -41,8 +42,8 @@ class DataLogger:
         for pid in self.pids:
             try:
                 row.values[pid] = self.client.current_data(pid)
-            except (ObdError, KeyError, ValueError):
-                row.values[pid] = None  # unsupported / undecodable -> blank cell
+            except (ObdError, IsoTpError, KeyError, ValueError):
+                row.values[pid] = None  # unsupported / undecodable / bus noise -> blank cell
         return row
 
     def run(self, samples: int, interval: float = 0.0) -> List[LogRow]:
