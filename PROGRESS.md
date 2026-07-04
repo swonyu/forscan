@@ -372,3 +372,12 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   `fordscope-code-review` skill (codifies this review technique). Web-layer findings (read-PID
   500, connect empty-body message, log negative-samples, live-poll transport concurrency)
   queued for iter 47.
+- **Iter 47** — Web-layer robustness (3 auditor findings fixed test-first; 342 green).
+  (B) `read_pid` now catches `ObdError`/`KeyError`/`ValueError` and returns a blank result
+  (`value=None`, `supported=False`, note) exactly like `live()`/`log()` — a valid-hex but
+  unsupported PID used to surface as an HTTP **500**; now a clean 200 blank. (D) `connect("")`
+  raises a clear `ValueError("select a port first")` instead of falling into the live-serial
+  branch and leaking a pyserial-dependency message (POST /api/connect with no body → clean 400).
+  (E) `log_csv` clamps `samples` to ≥1, so a negative count yields one row, not a silent
+  header-only file. +6 tests (controller + HTTP for each), all RED-first. Concurrency finding
+  (shared transport across `ThreadingHTTPServer` threads) still queued for iter 48.

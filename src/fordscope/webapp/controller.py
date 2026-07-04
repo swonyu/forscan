@@ -52,6 +52,8 @@ class FordScopeController:
     def connect(self, port: str, *, profile: Optional[str] = None) -> str:
         """Connect the demo simulator or a real serial adapter. Returns the banner."""
         self.disconnect()
+        if not port or not port.strip():
+            raise ValueError("select a port first")
         if port == DEMO_PORT:
             self.transport, self.modules, self.banner = open_backend(
                 "simulator", None, profile=profile
@@ -89,8 +91,20 @@ class FordScopeController:
 
     def read_pid(self, pid: int) -> dict:
         self._require()
-        r = self._obd().current_data(pid)
-        return {"pid": pid, "name": r.name, "value": r.value, "unit": r.unit}
+        try:
+            r = self._obd().current_data(pid)
+            return {"pid": pid, "name": r.name, "value": r.value, "unit": r.unit}
+        except (ObdError, KeyError, ValueError):
+            # PID valid-hex but not supported/decodable by this ECU — blank it,
+            # exactly like live()/log() do, rather than surfacing a server error.
+            return {
+                "pid": pid,
+                "name": f"PID {pid:02X}",
+                "value": None,
+                "unit": "",
+                "supported": False,
+                "note": "not supported by this ECU",
+            }
 
     def live(self, pids) -> list:
         """One live-data sample across several PIDs. Unsupported/undecodable PIDs
@@ -198,6 +212,7 @@ class FordScopeController:
         """Capture ``samples`` fast readings of ``pids`` and return CSV text.
         (A burst capture; the CLI `log --interval` does timed drive logs.)"""
         self._require()
+        samples = max(1, int(samples))  # a burst log needs at least one sample
         rows = DataLogger(self._obd(), pids).run(samples, interval=0.0)
         return rows_to_csv(rows, pids)
 

@@ -115,6 +115,31 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(len(lines), 4)  # header + 3 sample rows
         self.assertIn("1000.0", lines[1])
 
+    def test_read_unsupported_pid_returns_blank_not_error(self):
+        # A valid-hex PID the ECU doesn't support must come back blank (like live),
+        # not raise — the user typing an unsupported PID shouldn't get a server error.
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        r = c.read_pid(0x99)  # unsupported by the demo ECU
+        self.assertIsNone(r["value"])
+        self.assertFalse(r.get("supported", True))
+
+    def test_connect_empty_port_gives_clear_error(self):
+        # An empty/missing port must fail with a clear "select a port" message,
+        # not leak the live-backend pyserial dependency error.
+        c = FordScopeController()
+        with self.assertRaises(ValueError) as ctx:
+            c.connect("")
+        self.assertIn("select a port", str(ctx.exception).lower())
+
+    def test_log_csv_negative_samples_clamped_to_one(self):
+        # A negative sample count must not silently produce a header-only (empty) log.
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        csv = c.log_csv([0x0C], samples=-5)
+        lines = csv.strip().splitlines()
+        self.assertEqual(len(lines), 2)  # header + exactly one data row
+
 
 class ServerTests(unittest.TestCase):
     def setUp(self):
@@ -248,6 +273,27 @@ class ServerTests(unittest.TestCase):
         # A malformed hex query param is a client error, not a 500.
         status, _raw = self._req("GET", "/api/read?pid=zz")
         self.assertEqual(status, 400)
+
+    def test_read_unsupported_pid_returns_200_blank(self):
+        # Unsupported (but valid-hex) PID is a clean blank, not a 500.
+        self._json("POST", "/api/connect", {"port": DEMO_PORT})
+        status, j = self._json("GET", "/api/read?pid=99")
+        self.assertEqual(status, 200)
+        self.assertIsNone(j["value"])
+
+    def test_connect_no_body_returns_clear_400(self):
+        # POST /api/connect with no body must give a clear "select a port" 400,
+        # not a misleading pyserial-dependency error.
+        status, j = self._json("POST", "/api/connect")
+        self.assertEqual(status, 400)
+        self.assertIn("select a port", j["error"].lower())
+
+    def test_log_negative_samples_clamped(self):
+        self._json("POST", "/api/connect", {"port": DEMO_PORT})
+        status, raw = self._req("GET", "/api/log?pids=0C&samples=-5")
+        self.assertEqual(status, 200)
+        lines = raw.decode().strip().splitlines()
+        self.assertEqual(len(lines), 2)  # header + one row, not header-only
 
     def test_report_download(self):
         self._json("POST", "/api/connect", {"port": DEMO_PORT})
