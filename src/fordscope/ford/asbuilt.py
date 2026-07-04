@@ -72,8 +72,16 @@ class FileBackupStore:
         parent = os.path.dirname(self.path)
         if parent:
             os.makedirs(parent, exist_ok=True)
-        with open(self.path, "w") as fh:
+        # ATOMIC write: serialize to a temp file in the SAME directory, fsync, then
+        # os.replace() (atomic). An interrupted/failed write can then never truncate
+        # or corrupt the existing backup file — which holds every module's
+        # factory-original bytes, the one durable recovery path for an As-Built write.
+        tmp = self.path + ".tmp"
+        with open(tmp, "w") as fh:
             json.dump({k: v.hex() for k, v in self._data.items()}, fh, indent=2)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, self.path)
 
     def has(self, key: str) -> bool:
         return key in self._data

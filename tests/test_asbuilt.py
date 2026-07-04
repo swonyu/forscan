@@ -128,6 +128,23 @@ class FileBackupStoreTests(unittest.TestCase):
             coder.restore_block(BLOCK_DID)
             self.assertEqual(ecu.dids[BLOCK_DID], ORIGINAL)
 
+    def test_failed_flush_does_not_destroy_existing_backups(self):
+        # A write interrupted mid-flush (disk full, crash, ^C) must NOT truncate the
+        # file and destroy every previously-saved factory-original backup — the
+        # existing file must survive intact (atomic write).
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "backups.json")
+            store = FileBackupStore(path)
+            store.save("TESTVIN:5000", ORIGINAL)  # one real backup on disk
+            with mock.patch("json.dump", side_effect=OSError("disk full")):
+                with self.assertRaises(OSError):
+                    store.save("TESTVIN:6000", NEW)  # flush fails mid-write
+            # The original backup must still be intact and reloadable.
+            reopened = FileBackupStore(path)
+            self.assertEqual(reopened.load("TESTVIN:5000"), ORIGINAL)
+            self.assertIsNone(reopened.load("TESTVIN:6000"))
+
 
 if __name__ == "__main__":
     unittest.main()
