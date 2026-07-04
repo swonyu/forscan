@@ -10,6 +10,7 @@ import unittest
 
 from fordscope.webapp.controller import FordScopeController, NotConnectedError, DEMO_PORT, list_ports
 from fordscope.webapp.server import create_server
+from fordscope.cli import DEMO_VIN
 
 
 class ControllerTests(unittest.TestCase):
@@ -70,6 +71,15 @@ class ControllerTests(unittest.TestCase):
         c = FordScopeController()
         c.connect(DEMO_PORT)
         c.clear_dtcs()  # no exception
+
+    def test_health_report(self):
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        report = c.health_report()
+        self.assertIn(DEMO_VIN, report)
+        self.assertIn("NOT READY", report)
+        self.assertIn("P0143", report)
+        self.assertIn("Freeze frame", report)
 
     def test_readiness(self):
         c = FordScopeController()
@@ -209,6 +219,16 @@ class ServerTests(unittest.TestCase):
 
     def test_readiness_before_connect_returns_409(self):
         status, _raw = self._req("GET", "/api/readiness")
+        self.assertEqual(status, 409)
+
+    def test_report_endpoint(self):
+        self._json("POST", "/api/connect", {"port": DEMO_PORT})
+        _s, j = self._json("GET", "/api/report")
+        self.assertIn("VIN:", j["report"])
+        self.assertIn("P0143", j["report"])
+
+    def test_report_before_connect_returns_409(self):
+        status, _raw = self._req("GET", "/api/report")
         self.assertEqual(status, 409)
 
 

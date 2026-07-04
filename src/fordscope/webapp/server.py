@@ -45,6 +45,7 @@ INDEX_HTML = """<!doctype html>
   <button onclick="run('/api/vin')">VIN</button>
   <button onclick="showFreeze()">Freeze frame</button>
   <button onclick="showReadiness()">Readiness</button>
+  <button onclick="showReport()">Health report</button>
   <button onclick="clearDtc()">Clear codes</button>
   <input id="pid" value="0C" size="4"><button onclick="readPid()">Read PID (hex)</button>
 </div>
@@ -73,6 +74,9 @@ async function run(url){const r=await fetch(url);const j=await r.json();if(j.ban
 async function readPid(){const pid=document.getElementById('pid').value;
  const r=await fetch('/api/read?pid='+encodeURIComponent(pid));const j=await r.json();
  document.getElementById('out').textContent=j.error?j.error:(j.name+': '+j.value+' '+j.unit);}
+async function showReport(){const r=await fetch('/api/report');const j=await r.json();
+ if(j.banner)setBanner(j.banner);
+ document.getElementById('out').textContent=j.report||j.error||'';}
 async function showReadiness(){const r=await fetch('/api/readiness');const j=await r.json();
  if(j.banner)setBanner(j.banner);
  if(j.error){document.getElementById('out').textContent=j.error;return;}
@@ -179,6 +183,8 @@ def _make_handler(controller: FordScopeController):
                     return self._json({**fr, "banner": controller.banner})
                 if u.path == "/api/readiness":
                     return self._json({**controller.readiness(), "banner": controller.banner})
+                if u.path == "/api/report":
+                    return self._json({"report": controller.health_report(), "banner": controller.banner})
                 if u.path == "/api/log":
                     q = parse_qs(u.query)
                     pids = [int(p, 16) for p in q.get("pids", ["0C,05,0D"])[0].split(",") if p.strip()]

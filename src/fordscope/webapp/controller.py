@@ -133,6 +133,48 @@ class FordScopeController:
             })
         return rows
 
+    def health_report(self) -> str:
+        """A shareable text snapshot: VIN, readiness, whole-car DTCs, freeze frame.
+        Each section is independent — one failing section is noted, not fatal."""
+        self._require()
+        lines = ["FordScope vehicle health report", self.banner or "", ""]
+
+        try:
+            lines.append("VIN: " + self.vin())
+        except Exception:
+            lines.append("VIN: (unavailable)")
+
+        try:
+            rd = self.readiness()
+            verdict = "READY (likely PASS)" if (rd["ready"] and not rd["mil_on"]) else "NOT READY"
+            lines.append(
+                f"Inspection readiness: {verdict}  "
+                f"(MIL {'ON' if rd['mil_on'] else 'off'}, {rd['dtc_count']} DTC)"
+            )
+            if rd["not_ready"]:
+                lines.append("  Monitors not complete: " + ", ".join(rd["not_ready"]))
+        except Exception:
+            lines.append("Inspection readiness: (unavailable)")
+
+        lines += ["", "Trouble codes:"]
+        try:
+            lines.append(self.dtc())
+        except Exception:
+            lines.append("  (unavailable)")
+
+        lines.append("")
+        try:
+            fr = self.freeze_frame()
+            if fr["dtc"] or fr["rows"]:
+                lines.append(f"Freeze frame (triggered by {fr['dtc'] or 'n/a'}):")
+                lines += [f"  {r['name']}: {r['value']} {r['unit']}" for r in fr["rows"]]
+            else:
+                lines.append("Freeze frame: none stored")
+        except Exception:
+            lines.append("Freeze frame: (unavailable)")
+
+        return "\n".join(lines)
+
     def readiness(self) -> dict:
         """I/M readiness: MIL, DTC count, inspection-readiness + which monitors aren't complete."""
         self._require()

@@ -296,6 +296,12 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   and which monitors aren't complete. Demo PCM seeded with a coherent status (MIL on, 1 DTC,
   O2-sensor monitor incomplete → NOT READY). Filtered status PIDs (0x01/0x02) out of the live-
   dashboard picker (not gauges). +3 tests; verified by running. 319 total, `Ran 319 tests … OK`.
+- **Iter 39** — Combined Health Report in the Mac app. `controller.health_report()` composes VIN +
+  inspection-readiness verdict + whole-car DTCs (with descriptions) + freeze frame into one
+  shareable text snapshot; each section independently tolerant (a failing section is noted, not
+  fatal). `GET /api/report` + a "Health report" button. +3 tests; verified by running (full report
+  renders). One self-caught test bug: referenced `DEMO_VIN` without importing it — fixed the import,
+  not the assertion. 322 total, `Ran 322 tests … OK`.
 - **Iter 27** — Completed adversarial review coverage (CLI + scan services, the last un-reviewed
   logic). **1 more real bug found & fixed test-first** (268 total green): `scan_module` /
   `scan_module_dtcs` only caught `UdsError`, but `IsoTpSocket` raises a separate `IsoTpError`
