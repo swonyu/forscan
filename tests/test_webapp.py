@@ -144,6 +144,20 @@ class ControllerTests(unittest.TestCase):
         self.assertIn("P0113", [d["code"] for d in st["pending"]["codes"]])
         self.assertIn("P0420", [d["code"] for d in st["permanent"]["codes"]])
         self.assertIn("won't", st["permanent"]["meaning"].lower())  # plain-language meaning
+        self.assertTrue(st["confirmed"]["available"])  # a real read is available=True
+
+    def test_dtc_states_marks_bucket_unavailable_on_comms_failure(self):
+        # A genuine comms failure (timeout/dropout) must NOT be rendered as an
+        # affirmative empty "all-clear" — the bucket is flagged unavailable.
+        from unittest import mock
+        from fordscope.obd import ObdError
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        with mock.patch("fordscope.obd.ObdClient.read_dtcs_described",
+                        side_effect=ObdError("no response to mode 0x03")):
+            st = c.dtc_states()
+        self.assertFalse(st["confirmed"]["available"])
+        self.assertEqual(st["confirmed"]["codes"], [])
 
     def test_dtc_states_before_connect_raises(self):
         with self.assertRaises(NotConnectedError):

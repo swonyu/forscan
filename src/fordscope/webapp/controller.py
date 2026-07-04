@@ -20,7 +20,7 @@ from typing import List, Optional
 
 from ..cli import open_backend, list_serial_ports
 from ..isotp import IsoTpSocket
-from ..obd import ObdClient, ObdError, PID_TABLE
+from ..obd import ObdClient, ObdError, ObdNegativeResponse, PID_TABLE
 
 # Range-marker PIDs (0x00/0x20/…) plus status PIDs (0x01 monitor status, 0x02
 # freeze-DTC pointer) — none are live-gauge scalars, so keep them out of the picker.
@@ -134,25 +134,32 @@ class FordScopeController:
         self._require()
         obd = self._obd()
 
-        def _read(mode: int) -> list:
+        def _read(mode: int) -> dict:
+            # available=False on a genuine comms failure so an empty bucket is never
+            # rendered as an affirmative "all-clear" — a failed read is NOT verified
+            # absence. A negative response (ECU answered: mode/codes absent) IS a real
+            # empty result, so it stays available=True.
             try:
-                return [{"code": d.code, "definition": d.summary}
-                        for d in obd.read_dtcs_described(mode)]
+                codes = [{"code": d.code, "definition": d.summary}
+                         for d in obd.read_dtcs_described(mode)]
+                return {"codes": codes, "available": True}
+            except ObdNegativeResponse:
+                return {"codes": [], "available": True}
             except (ObdError, KeyError, ValueError):
-                return []
+                return {"codes": [], "available": False}
 
         return {
             "confirmed": {
                 "meaning": "Confirmed over multiple drive cycles — the MIL (check-engine light) is on for these.",
-                "codes": _read(0x03),
+                **_read(0x03),
             },
             "pending": {
                 "meaning": "Detected this drive cycle but not yet confirmed — may clear on their own if the fault doesn't recur.",
-                "codes": _read(0x07),
+                **_read(0x07),
             },
             "permanent": {
                 "meaning": "Confirmed faults the ECU won't let you clear manually — they clear only after the ECU itself re-verifies the repair over several drive cycles.",
-                "codes": _read(0x0A),
+                **_read(0x0A),
             },
         }
 
