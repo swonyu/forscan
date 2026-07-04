@@ -69,8 +69,12 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
       a native DIAGNOSTICS app, not a full FORScan As-Built replacement (maps unverified).
 - [x] 4.1 Live-data dashboard in the web app: `controller.live(pids)` + `GET /api/live?pids=…`
       + a browser view that polls every 1s into a table (Start/Stop). Unsupported PIDs blank, not fail.
-- [ ] 4.2 (later) package as a double-clickable .app (py2app/pyinstaller) — deferred: needs
-      uninstallable tooling + can't be verified here, so not built blind.
+- [~] 4.2 / R7 package as a double-clickable .app (pyinstaller) — SCAFFOLDED, UNVERIFIED (iter 87):
+      `tools/fordscope_launcher.py` (entry: `run()`), `tools/build_macos_app.sh` (one-command
+      pyinstaller build), `docs/PACKAGING.md` (approach + likely iterations + the works-today
+      `python -m fordscope.webapp` fallback). Launcher entry validated (imports cleanly); the BUILD
+      itself needs `pip install pyinstaller` on the owner's Mac — honestly marked UNVERIFIED, not
+      claimed working.
 
 ## Phase 5 — Roadmap features (honest backlog → `docs/ROADMAP.md`)
 Each is buildable + simulator-testable now; every real-car read stays [NEEDS ON-CAR CHECK].
