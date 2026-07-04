@@ -19,6 +19,15 @@ from .frames import (
     CF_MAX_DATA,
     ISOTP_MAX_CLASSIC_LEN,
 )
+from .socket import (
+    IsoTpSocket,
+    IsoTpError,
+    IsoTpTimeout,
+    IsoTpOverflow,
+    IsoTpSequenceError,
+    stmin_to_seconds,
+)
+from .simulated_ecu import SimulatedIsoTpEcu
 
 __all__ = [
     "IsoTpFrameType",
@@ -34,4 +43,11 @@ __all__ = [
     "FF_FIRST_DATA",
     "CF_MAX_DATA",
     "ISOTP_MAX_CLASSIC_LEN",
+    "IsoTpSocket",
+    "IsoTpError",
+    "IsoTpTimeout",
+    "IsoTpOverflow",
+    "IsoTpSequenceError",
+    "stmin_to_seconds",
+    "SimulatedIsoTpEcu",
 ]

@@ -14,7 +14,9 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
 - [ ] 0.2 Real backends behind the same ABC — DEFERRED (device I/O is [NEEDS ON-CAR CHECK];
       the slcan ASCII codec is testable and will land as a unit before wiring real serial)
 - [x] 1.1a ISO-TP frame codec: SF/FF/CF/FC encode + parse (pure, hand-derived fixtures)
-- [ ] 1.1b ISO-TP transport layer: stateful segmentation/reassembly + flow control over a `Transport`
+- [x] 1.1b ISO-TP transport layer: `IsoTpSocket` send/recv + flow control; `SimulatedIsoTpEcu`
+      (reusable simulated endpoint). BS=0 both ways; client send honours ECU block-size>0.
+      Follow-up: ECU-side receive block-size>0 + real STmin timing are [NEEDS ON-CAR CHECK].
 - [ ] 1.2 UDS client (ISO 14229): request/response, negative-response codes, session control
 - [ ] 1.3 OBD-II (SAE J1979) modes 01–0A on top of ISO-TP
 - [ ] 1.4 PID decode table (RPM, coolant, MAF, MAP, fuel trims, speed, …) with units
@@ -43,3 +45,11 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   length, CAN-FD/32-bit escapes explicitly rejected. +21 tests (40 total,
   `Ran 40 tests … OK`). Reordered plan: real hardware backends (0.2) deferred as
   on-car-only; building the fully-simulatable protocol stack (ISO-TP → UDS → OBD-II) first.
+- **Iter 3** — ISO-TP transport layer. `IsoTpSocket` (`isotp/socket.py`): SF + multi-frame
+  send with FF→FC→CF streaming honouring block-size/STmin; recv with FC(CTS) + in-sequence
+  reassembly; `stmin_to_seconds`; typed errors (Timeout/Overflow/Sequence).
+  `SimulatedIsoTpEcu` (`isotp/simulated_ecu.py`): reusable stateful endpoint for UDS/OBD
+  tests later. +13 tests incl. 4 client↔ECU round-trips (short/long × req/resp), a
+  block-size-2 send, and an out-of-sequence rejection (53 total, `Ran 53 tests … OK`).
+  One test-fixture bug self-caught: an 8-byte CF (impossible on classic CAN) — the codec's
+  validation rejected it; fixed the fixture, not the assertion.
