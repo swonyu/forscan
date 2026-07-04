@@ -5,19 +5,29 @@ hardware-*independent*: every layer runs against an in-process CAN **simulator**
 whole application is developed, tested, and demonstrable with **no car and no adapter
 attached**. Real hardware plugs in behind the same `Transport` interface.
 
-> **Status:** feature-complete against its plan (diagnostics + As-Built coding + a gated
-> reflashing protocol). **260 tests, all green.** Nothing here has been validated on a real
-> vehicle — see **Honesty boundaries** below. Build history: [`PROGRESS.md`](PROGRESS.md);
-> architecture: [`docs/DESIGN.md`](docs/DESIGN.md).
+> **Status:** feature-complete against its roadmap (diagnostics + native-macOS web app +
+> As-Built coding + a gated reflashing protocol). **412 tests, all green**, and the codebase
+> has been through 8 adversarial safety-audit passes (28 real bugs fixed). Nothing here has
+> been validated on a real vehicle — see **Honesty boundaries** below. Build history:
+> [`PROGRESS.md`](PROGRESS.md); architecture: [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## What it does
 
-- **Generic OBD-II (SAE J1979):** read/clear DTCs (with plain-English descriptions), live
-  data (16 decoded PIDs with units), VIN, whole-car module scan.
+- **Native macOS app (no Windows VM):** a local web app (`python -m fordscope.webapp`) with a
+  browser UI that talks to a **Vgate vLinker FS** (or any ELM327 adapter) — connect, whole-car
+  scan, a live dashboard with rolling **SVG sparkline graphs** + session **min/max/avg**, DTC
+  states, calibration, a shareable **health report**, and more. (FORScan is Windows-only; this
+  is the native-Mac path — the reason the tool exists.)
+- **Generic OBD-II (SAE J1979):** read/clear DTCs (plain-English descriptions + confirmed /
+  pending / permanent **state separation**), live data (35 decoded PIDs with units), VIN,
+  **calibration IDs + CVN** (Mode 09), **I/M readiness** + a **drive-cycle coach**, **freeze
+  frame** (Mode 02), **Mode 06** on-board monitoring test results (named monitor category +
+  raw value/limits + pass/fail from the ECU's own limits), whole-car module scan.
 - **Ford enhanced (UDS / ISO 14229):** ReadDataByIdentifier across every module, whole-car
   DTC report, bidirectional actuator/routine controls, SecurityAccess seed/key handshake.
 - **As-Built coding:** read/decode Ford As-Built blocks, set named features — with
-  **mandatory backup-before-write, read-back verification, and one-click restore.**
+  **un-bypassable backup-before-write, atomic durable backups, read-back verification, and
+  one-click restore.**
 - **Live-data logging:** poll PIDs to timestamped CSV.
 - **2016 Ford Fusion S profile:** the **confirmed-tier** module addresses (`--profile fusion2016`).
   The underlying data grades modules `confirmed` / `confirm-on-vehicle` / `plausible`; the profile
@@ -34,9 +44,17 @@ PYTHONPATH=src python3 -m fordscope log --pids 0C,05,0D --samples 5   # log to C
 PYTHONPATH=src python3 -m fordscope features        # list As-Built features (EXAMPLE/UNVERIFIED)
 ```
 
-Commands: `scan`, `dtc`, `read <pid>`, `vin`, `clear-dtc`, `features`, `read-feature`,
+Commands: `scan`, `dtc`, `read <pid>`, `vin`, `clear-dtc`, `ports`, `features`, `read-feature`,
 `set-feature`, `restore-feature`, `log`. Global options: `--backend {simulator,slcan,elm327}`,
 `--port`, `--profile {generic,fusion2016}`, `--backup-file`.
+
+### The Mac app (browser UI)
+```bash
+PYTHONPATH=src python3 -m fordscope.webapp        # opens the UI in your browser
+```
+Pick **Demo (simulator)** to explore with no hardware, or a real `/dev/cu.*` serial port
+(e.g. the Vgate vLinker FS) to run diagnostics on a live vehicle. Packaging it as a
+double-clickable `.app` is scaffolded but UNVERIFIED — see [`docs/PACKAGING.md`](docs/PACKAGING.md).
 
 ## Real hardware (unvalidated)
 

@@ -636,3 +636,11 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   `GET /api/drive-cycle`. +6 tests. 412 green. **The entire buildable roadmap R1–R6 is now DONE.**
   Remaining: R7 (.app packaging) + R8 (on-car) — owner-gated. Per the roadmap rule, feature-
   manufacturing STOPS here; further work is hardening/docs/the on-car graduation (R8).
+- **Iter 87** — R7 .app packaging SCAFFOLDED, UNVERIFIED (launcher + build script + docs/PACKAGING.md).
+- **Iter 88** (docs, maintenance — NOT a manufactured feature) — refreshed a materially stale README
+  (last rewritten iter 25): it claimed "260 tests" (now **412**) and "16 PIDs" (now **35**), and never
+  mentioned the **web app** (the whole Phase-4 native-macOS GUI) or the ~10 features shipped since
+  (calibration, Mode 06, drive-cycle coach, live graphing, DTC states, readiness, health report,
+  session stats). Now accurate + a Mac-app quick-start + the `ports` command + the packaging pointer.
+  Every claim VERIFIED against the code (PID count, endpoints, subcommands, test count), not memory.
+  412 green. **The tool is complete; the loop is now in maintenance mode — no features to manufacture.**
