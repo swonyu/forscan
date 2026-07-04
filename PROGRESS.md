@@ -796,6 +796,15 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   user-facing behavior with a CLI-level test `test_corrupt_backup_file_gives_actionable_cli_error`
   (asserts exit 3 + `unreadable/corrupt` + the file path in stderr). +1 test → **426 green**. Lesson
   re-affirmed: verify a claim before it ships, and correct the record openly when it was overstated.
+- **Iter 107** (docs-currency — stale test counts) — With the code backlog exhausted, checked doc
+  accuracy against reality: three current-state docs claimed a STALE test count while the suite is now
+  426. `README.md` said "**412 tests, all green**" (line 9) and "`./run_tests.sh` # 260 tests"
+  (line 89); `docs/PACKAGING.md` said "— 412 green —". Fixed all three DRIFT-RESISTANT rather than
+  re-pinning a number that goes stale every time I add a test: "**400+ tests, all green**", "the full
+  stdlib-unittest suite (no third-party deps); exit 0 == green", "full stdlib-unittest suite green".
+  Left PROGRESS.md's per-iteration historical counts (102/114/…/254) UNTOUCHED — those are the frozen
+  log of what was true at each iteration, correct as history. Repo-wide re-grep clean of stale hard
+  counts. Docs-only; 426 green.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the

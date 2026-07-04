@@ -6,7 +6,7 @@ whole application is developed, tested, and demonstrable with **no car and no ad
 attached**. Real hardware plugs in behind the same `Transport` interface.
 
 > **Status:** feature-complete against its roadmap (diagnostics + native-macOS web app +
-> As-Built coding + a gated reflashing protocol). **412 tests, all green**, and the codebase
+> As-Built coding + a gated reflashing protocol). **400+ tests, all green**, and the codebase
 > has been through 8 adversarial safety-audit passes (28 real bugs fixed). Nothing here has
 > been validated on a real vehicle — see **Honesty boundaries** below. Build history:
 > [`PROGRESS.md`](PROGRESS.md); architecture: [`docs/DESIGN.md`](docs/DESIGN.md).
@@ -86,5 +86,5 @@ python3 -m fordscope --backend elm327 --port /dev/tty.usbserial-XXXX --profile f
 ## Run the tests
 
 ```bash
-./run_tests.sh        # 260 tests, standard-library unittest, no third-party deps
+./run_tests.sh        # the full stdlib-unittest suite (no third-party deps); exit 0 == green
 ```

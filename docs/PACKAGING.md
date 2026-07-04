@@ -4,7 +4,7 @@
 > `pip install pyinstaller` in a Python environment that wasn't available when this was
 > written. The steps below are the intended approach and a best-effort script; expect to
 > iterate. Nothing here has run on a machine. (The diagnostic tool itself is fully tested
-> — 412 green — this is only about wrapping it in a double-clickable app.)
+> — full stdlib-unittest suite green — this is only about wrapping it in a double-clickable app.)
 
 ## What the `.app` is
 FordScope's UI is a **local web app** (Python stdlib `http.server` + one embedded page).
