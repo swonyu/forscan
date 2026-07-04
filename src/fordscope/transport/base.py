@@ -2,9 +2,9 @@
 
 Everything above this layer (ISO-TP, UDS, OBD-II, services, UI) speaks in
 ``CanFrame`` objects and never touches hardware directly. Concrete transports
-— the simulator, an slcan dongle, a Tactrix Openport — all implement the same
-``Transport`` ABC, so the rest of FordScope is hardware-agnostic and fully
-testable without a car attached.
+— the simulator, an slcan dongle (CANable-class), and an ELM327/OBDLink/Vgate
+vLinker-FS adapter — all implement the same ``Transport`` ABC, so the rest of
+FordScope is hardware-agnostic and fully testable without a car attached.
 """
 from __future__ import annotations
 
@@ -72,8 +72,9 @@ class CanFrame:
 class Transport(ABC):
     """Abstract CAN transport.
 
-    Concrete backends: ``SimulatorTransport`` (no hardware), and later an slcan
-    dongle and a Tactrix Openport. Supports use as a context manager::
+    Concrete backends: ``SimulatorTransport`` (no hardware), ``SlcanTransport``
+    (CANable-class raw CAN), and ``Elm327Transport`` (ELM327 / OBDLink / Vgate
+    vLinker FS). Supports use as a context manager::
 
         with SomeTransport(...) as bus:
             bus.send(frame)

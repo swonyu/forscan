@@ -694,6 +694,16 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   entry point must now be proven to announce its listening URL/port. Verified by running — suite
   output ends cleanly at `OK`, no banner; +1 assertion. No production code change; 416 green.
   (Genuine hygiene/coverage fix, not a manufactured feature.)
+- **Iter 98** (docs-accuracy sweep) — Killed the **phantom "Tactrix Openport" backend** still cited
+  in the *canonical source* an external reader hits first — the same drift I fixed in `docs/DESIGN.md`
+  at iter 89, still lurking in code docstrings. `transport/base.py` (module + `Transport` class
+  docstrings) named a non-existent Openport and OMITTED the two real backends; fixed to the shipped
+  reality (`SlcanTransport` CANable-class + `Elm327Transport` ELM327/OBDLink/Vgate vLinker FS), and
+  dropped the stale "and later" (both ship now). `cli.py` module docstring referenced a `--backend
+  openport` that argparse doesn't even accept (real choices: simulator/slcan/elm327) AND mis-described
+  the live backends as "placeholders that refuse" when `open_backend()` actually builds real
+  unit-tested transports flagged with the `NEEDS ON-CAR CHECK` banner — corrected to match verified
+  source behavior. Repo-wide grep now CLEAN of Openport/Tactrix. No behavior change; 416 green.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the

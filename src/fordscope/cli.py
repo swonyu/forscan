@@ -1,9 +1,10 @@
 """FordScope command-line interface.
 
-Runs against a **simulated** demo vehicle (there is no hardware in this build).
-Every command prints a clear SIMULATED banner, and the real-hardware backends are
-honest placeholders that refuse rather than pretend — a hardware backend must be
-written and validated on-car before ``--backend slcan``/``openport`` do anything.
+Runs against a **simulated** demo vehicle by default; every simulator command prints a
+clear SIMULATED banner. The two real-hardware backends (``--backend slcan`` and
+``--backend elm327``, both needing ``--port``) carry real, unit-tested codecs but are
+UNVALIDATED on-car: they announce a ``NEEDS ON-CAR CHECK`` banner rather than pretend to
+be trustworthy, and must be verified against a real vehicle before being relied on.
 
 Run it:  PYTHONPATH=src python -m fordscope scan
 """
