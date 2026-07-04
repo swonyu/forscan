@@ -263,6 +263,14 @@ class ObdClientTests(unittest.TestCase):
         client, _ = make_obd(calibration_ids=["CAL-ONE-A", "CAL-TWO-B"])
         self.assertEqual(client.read_calibration_ids(), ["CAL-ONE-A", "CAL-TWO-B"])
 
+    def test_over_long_calibration_seed_stays_one_wire_width_item(self):
+        # A fixture that over-fills the 16-byte CALID field must still be emitted
+        # as ONE valid fixed-width item, not mis-split into several by the decoder.
+        client, _ = make_obd(calibration_ids=["THIS-CALID-IS-WAY-TOO-LONG-FOR-16"])
+        result = client.read_calibration_ids()
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0], "THIS-CALID-IS-WA")  # first 16 chars
+
     def test_read_cvns_as_hex(self):
         # Mode 09 InfoType 0x06 — 4-byte verification number, surfaced as hex.
         client, _ = make_obd(cvns=[bytes([0xA5, 0xB3, 0xC1, 0xD2])])

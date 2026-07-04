@@ -118,11 +118,11 @@ class SimulatedObdEcu:
         if pid == 0x02 and self.vin is not None:
             return bytes([0x49, 0x02, 0x01]) + self.vin.encode("ascii")
         if pid == 0x04 and self.calibration_ids:  # calibration ID(s), 16-byte items
-            return self._info_items(0x04, [s.encode("ascii").ljust(16, b"\x00") for s in self.calibration_ids])
+            return self._info_items(0x04, [s.encode("ascii").ljust(16, b"\x00")[:16] for s in self.calibration_ids])
         if pid == 0x06 and self.cvns:  # calibration verification number(s), 4-byte
             return self._info_items(0x06, [bytes(c).ljust(4, b"\x00")[:4] for c in self.cvns])
         if pid == 0x0A and self.ecu_names:  # ECU name(s), 20-byte items
-            return self._info_items(0x0A, [s.encode("ascii").ljust(20, b"\x00") for s in self.ecu_names])
+            return self._info_items(0x0A, [s.encode("ascii").ljust(20, b"\x00")[:20] for s in self.ecu_names])
         return bytes([0x7F, 0x09, 0x31])
 
     @staticmethod
