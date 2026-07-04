@@ -25,12 +25,16 @@ class SimulatedObdEcu:
         pending: "Optional[List[str]]" = None,
         permanent: "Optional[List[str]]" = None,
         vin: "Optional[str]" = None,
+        freeze_frame: "Optional[Dict[int, bytes]]" = None,
+        freeze_dtc: "Optional[str]" = None,
     ) -> None:
         self.pids: Dict[int, bytes] = {int(k): bytes(v) for k, v in (pids or {}).items()}
         self.dtcs: List[str] = list(dtcs or [])
         self.pending: List[str] = list(pending or [])
         self.permanent: List[str] = list(permanent or [])
         self.vin = vin
+        self.freeze_frame: Dict[int, bytes] = {int(k): bytes(v) for k, v in (freeze_frame or {}).items()}
+        self.freeze_dtc = freeze_dtc
         self.cleared = False
 
     def __call__(self, request: bytes) -> Optional[bytes]:
@@ -39,6 +43,8 @@ class SimulatedObdEcu:
         mode = request[0]
         if mode == 0x01:
             return self._mode01(request)
+        if mode == 0x02:
+            return self._mode02(request)
         if mode == 0x03:
             return self._dtc_block(0x43, self.dtcs)
         if mode == 0x04:
@@ -65,6 +71,19 @@ class SimulatedObdEcu:
         if pid not in self.pids:
             return bytes([0x7F, 0x01, 0x31])  # requestOutOfRange
         return bytes([0x41, pid]) + self.pids[pid]
+
+    def _mode02(self, request: bytes) -> bytes:
+        # [0x02, pid, frame] -> [0x42, pid, frame, ...data]
+        if len(request) < 2:
+            return bytes([0x7F, 0x02, 0x13])
+        pid = request[1]
+        frame = request[2] if len(request) > 2 else 0
+        if pid == 0x02:  # the DTC that caused the freeze frame
+            dtc_bytes = encode_dtc(self.freeze_dtc) if self.freeze_dtc else bytes([0x00, 0x00])
+            return bytes([0x42, 0x02, frame]) + dtc_bytes
+        if pid in self.freeze_frame:
+            return bytes([0x42, pid, frame]) + self.freeze_frame[pid]
+        return bytes([0x7F, 0x02, 0x31])
 
     def _supported_mask(self, base: int) -> bytes:
         bits = 0

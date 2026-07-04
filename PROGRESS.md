@@ -277,6 +277,10 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   hand-verified vs SAE J1979; +10 tests with hand-derived values (the scaling is exactly where a
   wrong reading would hide). 304 total, `Ran 304 tests … OK`. The Mac app's "Supported PIDs" now
   names far more of what a car reports.
+- **Iter 35** — Freeze-frame (Mode 02) engine. `ObdClient.freeze_frame(pid, frame)` (frozen PID
+  value via the same decoders) + `freeze_frame_dtc()` (the DTC that triggered it, or None);
+  `SimulatedObdEcu` freeze_frame/freeze_dtc seed + `_mode02` ([0x02,pid,frame]→[0x42,pid,frame,data]).
+  +4 tests. Engine layer; wires into the Mac app next. 308 total, `Ran 308 tests … OK`.
 - **Iter 27** — Completed adversarial review coverage (CLI + scan services, the last un-reviewed
   logic). **1 more real bug found & fixed test-first** (268 total green): `scan_module` /
   `scan_module_dtcs` only caught `UdsError`, but `IsoTpSocket` raises a separate `IsoTpError`

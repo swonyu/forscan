@@ -7,10 +7,11 @@ vehicle info (VIN). Positive response = request mode + 0x40; negative response
 from __future__ import annotations
 
 from ..isotp.socket import IsoTpSocket
-from .pids import PidResult, decode_pid, decode_dtcs, decode_supported_pids
+from .pids import PidResult, decode_pid, decode_dtc, decode_dtcs, decode_supported_pids
 from .dtc_database import DtcInfo, describe_dtc
 
 MODE_CURRENT_DATA = 0x01
+MODE_FREEZE_FRAME = 0x02
 MODE_STORED_DTCS = 0x03
 MODE_CLEAR_DTCS = 0x04
 MODE_PENDING_DTCS = 0x07
@@ -60,6 +61,25 @@ class ObdClient:
         if len(resp) < 2 or resp[1] != (pid & 0xFF):
             raise ObdError("PID echo mismatch in Mode 01 response")
         return decode_pid(pid, resp[2:])
+
+    def freeze_frame(self, pid: int, frame: int = 0) -> PidResult:
+        """Mode 02: read one PID's frozen value from a freeze frame."""
+        resp = self._request(bytes([MODE_FREEZE_FRAME, pid & 0xFF, frame & 0xFF]))
+        # [0x42, pid, frame, ...data]
+        if len(resp) < 3 or resp[1] != (pid & 0xFF):
+            raise ObdError("freeze-frame PID echo mismatch")
+        return decode_pid(pid, resp[3:])
+
+    def freeze_frame_dtc(self, frame: int = 0):
+        """Mode 02 PID 0x02: the DTC that triggered the freeze frame, or None."""
+        resp = self._request(bytes([MODE_FREEZE_FRAME, 0x02, frame & 0xFF]))
+        # [0x42, 0x02, frame, A, B]
+        if len(resp) < 5:
+            return None
+        a, b = resp[3], resp[4]
+        if a == 0 and b == 0:
+            return None
+        return decode_dtc(a, b)
 
     def supported_pids(self, max_ranges: int = 8) -> list:
         """Mode 01: which PIDs the ECU supports. Queries PID 0x00, then 0x20, …

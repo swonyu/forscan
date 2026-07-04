@@ -99,6 +99,26 @@ class ExtendedPidDecodeTests(unittest.TestCase):
             decode_pid(0x0C, bytes([0x0F]))  # RPM needs 2 bytes
 
 
+class FreezeFrameTests(unittest.TestCase):
+    def test_freeze_frame_pid_values(self):
+        client, _ = make_obd(freeze_frame={0x0C: bytes([0x0F, 0xA0]), 0x05: bytes([90])})
+        self.assertEqual(client.freeze_frame(0x0C).value, 1000.0)  # frozen RPM
+        self.assertEqual(client.freeze_frame(0x05).value, 50)       # frozen coolant
+
+    def test_freeze_frame_dtc(self):
+        client, _ = make_obd(freeze_dtc="P0143")
+        self.assertEqual(client.freeze_frame_dtc(), "P0143")
+
+    def test_no_freeze_frame_dtc_is_none(self):
+        client, _ = make_obd()  # nothing frozen
+        self.assertIsNone(client.freeze_frame_dtc())
+
+    def test_freeze_frame_unsupported_pid_raises(self):
+        client, _ = make_obd(freeze_frame={0x0C: bytes([0x0F, 0xA0])})
+        with self.assertRaises(ObdNegativeResponse):
+            client.freeze_frame(0x99)
+
+
 class DtcCodecTests(unittest.TestCase):
     def test_decode_known(self):
         self.assertEqual(decode_dtc(0x01, 0x43), "P0143")
