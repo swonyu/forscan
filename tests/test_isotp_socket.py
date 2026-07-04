@@ -12,6 +12,7 @@ from fordscope.isotp import (
     SimulatedIsoTpEcu,
     IsoTpFrameType,
     FlowStatus,
+    IsoTpError,
     IsoTpSequenceError,
     parse_isotp,
     encode_flow_control,
@@ -112,6 +113,22 @@ class SendPathTests(unittest.TestCase):
         # 1 FF + 4 CFs.
         self.assertEqual(len(bus.sent), 5)
         self.assertGreaterEqual(ecu.fcs_sent, 2)  # at least two flow-control rounds
+
+    def test_reserved_flow_status_aborts_with_fs_error(self):
+        # ISO 15765-2 §6.5.5.3: an FC frame with a reserved FlowStatus (0x3-0xF) is
+        # an N_PCI error — abort with an FS error, don't silently treat it as WAIT.
+        class ReservedFsEcu:
+            def __call__(self, frame):
+                if parse_isotp(frame.data).type is IsoTpFrameType.FIRST:
+                    return (CanFrame(RESP_ID, bytes([0x35, 0x00, 0x00])),)  # FS nibble 5
+                return ()
+
+        bus = SimulatorTransport(ReservedFsEcu())
+        bus.open()
+        sock = IsoTpSocket(bus, tx_id=REQ_ID, rx_id=RESP_ID)
+        with self.assertRaises(IsoTpError) as ctx:
+            sock.send(bytes(range(20)))  # forces FF + FC
+        self.assertIn("reserved", str(ctx.exception).lower())
 
 
 class RoundTripTests(unittest.TestCase):

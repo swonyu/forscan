@@ -148,7 +148,13 @@ class IsoTpSocket:
                 raise IsoTpOverflow("receiver reported overflow")
             if pci.flow_status == FlowStatus.CONTINUE:
                 return pci
-            # WAIT: loop and read the next FC
+            if pci.flow_status != FlowStatus.WAIT:
+                # ISO 15765-2 §6.5.5.3: a reserved FlowStatus (0x3-0xF) is an N_PCI
+                # error (N_INVALID_FS) — abort, don't reinterpret it as WAIT.
+                raise IsoTpError(
+                    f"invalid flow-control FlowStatus 0x{int(pci.flow_status):X} (reserved)"
+                )
+            # WAIT (0x1): loop and read the next FC
         raise IsoTpTimeout("too many flow-control WAIT frames")
 
     def _stream_cfs(self, rest: bytes, fc: IsoTpPci) -> None:
