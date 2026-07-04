@@ -72,8 +72,22 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
 - [ ] 4.2 (later) package as a double-clickable .app (py2app/pyinstaller) — deferred: needs
       uninstallable tooling + can't be verified here, so not built blind.
 
+## Phase 5 — Roadmap features (honest backlog → `docs/ROADMAP.md`)
+Each is buildable + simulator-testable now; every real-car read stays [NEEDS ON-CAR CHECK].
+Build order R1→R2→R3→R6→R4→R5, a review pass interleaved. **When these are done, STOP
+feature-manufacturing** (per ROADMAP.md) — shift to hardening/docs/review and say so plainly.
+- [ ] R1 Mode 09 CALID + CVN (+ ECU name) readout — the "which calibration am I on?" datapoint
+- [ ] R2 Session min/max/avg per live PID (surfaced in the dashboard + health report)
+- [ ] R3 Readiness / drive-cycle coach — generic OBD conditions to complete each not-ready monitor
+- [ ] R6 DTC state separation (confirmed / pending / permanent) with a one-line meaning
+- [ ] R4 Live PID graphing (inline SVG sparklines) in the web UI
+- [ ] R5 Mode 06 on-board monitoring test results (generic decode; TID meanings OEM — not invented)
+
 ## Tooling
 - [x] `fordscope-build` skill (`.claude/skills/`) + project `CLAUDE.md`
+- [x] `fordscope-code-review` skill — codifies the adversarial review technique (the bug-class
+      checklist that has caught every real bug here: parser bound-checks, exception hierarchy,
+      HTTP status ordering, resource leaks, spec-math constants; reproduce-RED-before-fix)
 - [x] `ford/fusion_2016.py` — 2016 Fusion S profile from a 7-agent adversarially-verified research
       run: CONFIRMED module addresses (PCM 7E0/ABS 760/RCM 737/APIM 7D0/IPC 720/BCM 726) +
       confirm-on-vehicle/plausible tiers; As-Built pointers COMMUNITY-SOURCED (block-level only,
