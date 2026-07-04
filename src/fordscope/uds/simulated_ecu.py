@@ -25,6 +25,7 @@ from .services import (
     ROUTINE_CONTROL,
     READ_DTC_INFORMATION,
     REPORT_DTC_BY_STATUS_MASK,
+    SECURITY_ACCESS,
     TESTER_PRESENT,
     SESSION_DEFAULT,
     SESSION_PROGRAMMING,
@@ -38,6 +39,8 @@ from .services import (
     NRC_INCORRECT_LENGTH_OR_FORMAT,
     NRC_REQUEST_OUT_OF_RANGE,
     NRC_REQUEST_SEQUENCE_ERROR,
+    NRC_INVALID_KEY,
+    NRC_EXCEED_NUMBER_OF_ATTEMPTS,
 )
 from .dtc import UdsDtc, encode_dtc_record
 
@@ -50,6 +53,10 @@ class SimulatedUdsEcu:
         io_dids: "Optional[set]" = None,
         routines: "Optional[Dict[int, bytes]]" = None,
         dtcs: "Optional[list]" = None,
+        security_key=None,
+        security_seed: bytes = b"\x11\x22\x33\x44",
+        security_levels=(0x01,),
+        security_max_attempts: int = 3,
     ) -> None:
         self.dids: Dict[int, bytes] = {int(k): bytes(v) for k, v in (dids or {}).items()}
         self.session: int = SESSION_DEFAULT
@@ -61,6 +68,15 @@ class SimulatedUdsEcu:
         self.routines_started: set = set()
         # stored DTCs (UdsDtc list) for ReadDTCInformation
         self.dtcs: "list[UdsDtc]" = list(dtcs or ())
+        # SecurityAccess state. security_key(seed)->key is the "secret" algorithm;
+        # None means no security is configured (0x27 -> subFunctionNotSupported).
+        self.security_key = security_key
+        self.security_seed = bytes(security_seed)
+        self.security_levels = set(security_levels)
+        self.security_max_attempts = security_max_attempts
+        self.unlocked_levels: set = set()
+        self.security_attempts = 0
+        self._pending_key: Dict[int, bytes] = {}
 
     def __call__(self, request: bytes) -> Optional[bytes]:
         if not request:
@@ -74,6 +90,7 @@ class SimulatedUdsEcu:
             INPUT_OUTPUT_CONTROL_BY_IDENTIFIER: self._io_control,
             ROUTINE_CONTROL: self._routine_control,
             READ_DTC_INFORMATION: self._read_dtc_information,
+            SECURITY_ACCESS: self._security_access,
             TESTER_PRESENT: self._tester_present,
         }.get(sid)
         if handler is None:
@@ -162,6 +179,35 @@ class SimulatedUdsEcu:
                 return self._nrc(ROUTINE_CONTROL, NRC_REQUEST_SEQUENCE_ERROR)
             return head + self.routines[rid]
         return self._nrc(ROUTINE_CONTROL, NRC_SUBFUNCTION_NOT_SUPPORTED)
+
+    def _security_access(self, request: bytes) -> Optional[bytes]:
+        # [0x27, sub, *key]. Odd sub = requestSeed; even sub = sendKey.
+        if len(request) < 2:
+            return self._nrc(SECURITY_ACCESS, NRC_INCORRECT_LENGTH_OR_FORMAT)
+        if self.security_key is None:
+            return self._nrc(SECURITY_ACCESS, NRC_SUBFUNCTION_NOT_SUPPORTED)
+        sub = request[1]
+        pos = self._positive(SECURITY_ACCESS)
+        if sub % 2 == 1:  # requestSeed
+            if sub not in self.security_levels:
+                return self._nrc(SECURITY_ACCESS, NRC_SUBFUNCTION_NOT_SUPPORTED)
+            if sub in self.unlocked_levels:
+                return bytes([pos, sub]) + bytes(len(self.security_seed))  # zero seed
+            self._pending_key[sub + 1] = self.security_key(self.security_seed)
+            return bytes([pos, sub]) + self.security_seed
+        # sendKey (even)
+        expected = self._pending_key.get(sub)
+        if expected is None:
+            return self._nrc(SECURITY_ACCESS, NRC_REQUEST_SEQUENCE_ERROR)
+        if bytes(request[2:]) == expected:
+            self.unlocked_levels.add(sub - 1)
+            self.security_attempts = 0
+            del self._pending_key[sub]
+            return bytes([pos, sub])
+        self.security_attempts += 1
+        if self.security_attempts >= self.security_max_attempts:
+            return self._nrc(SECURITY_ACCESS, NRC_EXCEED_NUMBER_OF_ATTEMPTS)
+        return self._nrc(SECURITY_ACCESS, NRC_INVALID_KEY)
 
     def _read_dtc_information(self, request: bytes) -> Optional[bytes]:
         # [0x19, subfunction, statusMask]

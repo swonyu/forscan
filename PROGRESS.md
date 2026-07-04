@@ -51,7 +51,10 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
       `EXAMPLE_FEATURES` shipped UNVERIFIED (honesty test enforces the flag).
 
 ## Phase 3 — Reflashing (Tier 5, gated)
-- [ ] 5.1 Flashing state machine (0x27/0x34/0x36/0x37), stubbed — needs FDRS keys/calibrations
+- [x] 5.0 SecurityAccess (0x27) seed/key handshake — `UdsClient.request_seed`/`send_key`/`unlock`
+      (key_fn user-supplied; NO real Ford algorithm shipped/cracked) + `SimulatedUdsEcu` security
+      (levels, invalid-key/exceed-attempts/sequence-error). Gates As-Built writes + reflashing on-car.
+- [ ] 5.1 Flashing state machine (0x34/0x36/0x37), stubbed — needs FDRS keys/calibrations
 
 ## Tooling
 - [x] `fordscope-build` skill (`.claude/skills/`) + project `CLAUDE.md`
@@ -205,3 +208,10 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   PIDs log as blank cells, not aborts. `rows_to_csv`/`write_csv_file` with named+unit column headers.
   CLI `log --pids 0C,05,0D --samples N --interval S [--out file.csv]`. +11 tests; verified by running
   (CSV with `Engine RPM (rpm)`,`…coolant…(degC)` columns). 246 total, `Ran 246 tests … OK`.
+- **Iter 23** — UDS SecurityAccess (0x27), Phase 3 groundwork. `UdsClient.request_seed`/`send_key`/
+  `unlock(key_fn, level)` — seed→key handshake; all-zero seed = already-unlocked. HONESTY: `key_fn`
+  is user-supplied (FDRS/own analysis); FordScope ships NO real Ford key algorithm and cracks none.
+  `SimulatedUdsEcu` security (configurable key/seed/levels/attempts) with invalidKey (0x35),
+  exceedAttempts (0x36), requestSequenceError (0x24), subFunctionNotSupported (unconfigured/level).
+  +8 tests (demo XOR-0x5A key). This is what gates real As-Built writes + reflashing on-car.
+  254 total, `Ran 254 tests … OK`.

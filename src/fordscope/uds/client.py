@@ -23,6 +23,7 @@ from .services import (
     ROUTINE_CONTROL,
     READ_DTC_INFORMATION,
     REPORT_DTC_BY_STATUS_MASK,
+    SECURITY_ACCESS,
     TESTER_PRESENT,
     ROUTINE_START,
     ROUTINE_STOP,
@@ -179,6 +180,37 @@ class UdsClient:
 
     def request_routine_results(self, routine_id: int) -> bytes:
         return self.routine_control(ROUTINE_REQUEST_RESULTS, routine_id)
+
+    # --- SecurityAccess (0x27) ------------------------------------------
+    # SAFETY/HONESTY: this is the seed/key PROTOCOL only. key_fn(seed)->key is the
+    # OEM's secret algorithm, supplied by YOU (e.g. via an FDRS subscription).
+    # FordScope does not include or crack any real Ford SecurityAccess algorithm.
+    def request_seed(self, level: int = 0x01) -> bytes:
+        """Request the seed at an odd sub-function level. Returns the seed bytes."""
+        resp = self.request(bytes([SECURITY_ACCESS, level & 0xFF]))
+        assert resp is not None
+        if len(resp) < 2 or resp[1] != (level & 0xFF):
+            raise UnexpectedResponseError("SecurityAccess seed echo mismatch")
+        return resp[2:]
+
+    def send_key(self, key_level: int, key: bytes) -> None:
+        """Send the computed key at an even sub-function level (seed level + 1)."""
+        resp = self.request(bytes([SECURITY_ACCESS, key_level & 0xFF]) + bytes(key))
+        assert resp is not None
+        if len(resp) < 2 or resp[1] != (key_level & 0xFF):
+            raise UnexpectedResponseError("SecurityAccess key echo mismatch")
+
+    def unlock(self, key_fn, level: int = 0x01) -> None:
+        """Full handshake: request seed -> key = key_fn(seed) -> send key.
+
+        An all-zero seed means the ECU is already unlocked (no key sent). Raises
+        NegativeResponseError (NRC 0x35 invalidKey / 0x36 exceedAttempts) on failure.
+        """
+        seed = self.request_seed(level)
+        if not any(seed):
+            return  # already unlocked
+        key = key_fn(bytes(seed))
+        self.send_key(level + 1, key)
 
     def read_dtc_information(self, status_mask: int = 0xFF) -> "list[UdsDtc]":
         """ReadDTCInformation (0x19 / reportDTCByStatusMask). Returns decoded DTCs."""
