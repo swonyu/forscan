@@ -664,6 +664,14 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   So the browser dashboard — dead since it was written until iter 92 — is now VERIFIED working by
   running the actual page, not by claim. Added `.claude/launch.json` for repeatable preview runs.
   Lesson closed: the integrated artifact is verified only by launching it. No code change; 416 green.
+- **Iter 94** — **Thorough** browser verification (iter 93 checked a sample; this checks the whole
+  UI). Re-launched the real webapp via Preview and exercised EVERY render function in-browser
+  (connect → scan/dtc/vin/calibration/dtc-states/drive-cycle/readiness/freeze/health-report), each
+  rendering correct demo data with **zero console errors**. The 3 render functions I HAND-WROTE this
+  session (`showCalibration`/`showDtcStates`/`showDriveCycle`) — previously only structural+endpoint
+  tested — are now confirmed to actually render (e.g. "Calibration IDs: DEMO-PCM-CAL-01 / CVN
+  1A2B3C4D"; "• Oxygen sensor (generic): …"; "CONFIRMED — …MIL is on"). The browser dashboard is now
+  end-to-end verified in full, not by claim. No code change; 416 green.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the
