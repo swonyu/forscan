@@ -72,6 +72,13 @@ def build_demo_vehicle() -> Tuple[SimulatorTransport, List[AddressPair]]:
                 # calibration readout is demonstrable end-to-end on the simulator
                 calibration_ids=["DEMO-PCM-CAL-01"],
                 cvns=[bytes([0x1A, 0x2B, 0x3C, 0x4D])],
+                # Mode 06: catalyst + O2 pass; EGR deliberately out-of-limits (fails)
+                # so the pass/fail path is demonstrable end-to-end. (tid,uasid,val,min,max)
+                monitor_tests={
+                    0x21: [(0x80, 0x01, 100, 50, 200)],
+                    0x01: [(0x8E, 0x10, 5, 0, 10)],
+                    0x31: [(0x83, 0x01, 300, 100, 250)],
+                },
                 # frozen snapshot captured when P0143 set: idling, warm, stopped
                 freeze_frame={0x0C: bytes([0x0F, 0xA0]), 0x05: bytes([85]), 0x0D: bytes([0x00])},
                 freeze_dtc="P0143",

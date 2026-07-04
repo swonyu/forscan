@@ -26,6 +26,8 @@ from ..obd import ObdClient, ObdError, ObdNegativeResponse, PID_TABLE
 # freeze-DTC pointer) — none are live-gauge scalars, so keep them out of the picker.
 _META_PIDS = {0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0, 0xE0}
 _NON_SCALAR_PIDS = _META_PIDS | {0x01, 0x02}
+# Common standardized Mode 06 Monitor IDs to sweep (O2, catalyst, EGR, EVAP, misfire).
+_COMMON_MODE06_MIDS = (0x01, 0x02, 0x05, 0x06, 0x21, 0x22, 0x31, 0x32, 0x33, 0x3A, 0x3B, 0x3C, 0xA1)
 from ..services import (
     scan_vehicle,
     format_scan_report,
@@ -234,6 +236,34 @@ class FordScopeController:
     def vin(self) -> str:
         self._require()
         return self._obd().read_vin()
+
+    @_synchronized
+    def monitor_tests(self, mids=None) -> list:
+        """Mode 06 on-board monitoring test results across the common standardized
+        monitors. Each entry: named MID category + raw value/min/max + pass/fail
+        (from the ECU's own limits); TID stays raw. Unsupported MIDs are skipped."""
+        self._require()
+        obd = self._obd()
+        out = []
+        for mid in (mids or _COMMON_MODE06_MIDS):
+            try:
+                tests = obd.monitor_tests(mid)
+            except (ObdError, KeyError, ValueError):
+                continue  # ECU doesn't support this monitor
+            if not tests:
+                continue
+            out.append({
+                "mid": mid,
+                "mid_hex": f"{mid:02X}",
+                "category": tests[0].category,
+                "standardized": tests[0].standardized_mid,
+                "tests": [
+                    {"tid_hex": f"{t.tid:02X}", "value": t.value,
+                     "min": t.min_limit, "max": t.max_limit, "passed": t.passed}
+                    for t in tests
+                ],
+            })
+        return out
 
     @_synchronized
     def calibration(self) -> dict:

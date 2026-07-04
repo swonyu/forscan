@@ -215,6 +215,9 @@ def _make_handler(controller: FordScopeController):
                 if u.path == "/api/dtc-states":
                     st, banner = controller.snapshot(controller.dtc_states)
                     return self._json({**st, "banner": banner})
+                if u.path == "/api/monitor-tests":
+                    monitors, banner = controller.snapshot(controller.monitor_tests)
+                    return self._json({"monitors": monitors, "banner": banner})
                 if u.path == "/api/report":
                     report, banner = controller.snapshot(controller.health_report)
                     return self._json({"report": report, "banner": banner})

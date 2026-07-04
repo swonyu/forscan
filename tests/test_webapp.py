@@ -163,6 +163,17 @@ class ControllerTests(unittest.TestCase):
         with self.assertRaises(NotConnectedError):
             FordScopeController().dtc_states()
 
+    def test_monitor_tests_lists_seeded_monitors_with_passfail(self):
+        c = FordScopeController()
+        c.connect(DEMO_PORT)
+        mt = c.monitor_tests()
+        cats = {m["category"] for m in mt}
+        self.assertIn("Catalyst Monitor Bank 1", cats)
+        cat = next(m for m in mt if m["mid"] == 0x21)
+        self.assertTrue(cat["tests"][0]["passed"])          # demo catalyst passes
+        egr = next(m for m in mt if m["mid"] == 0x31)
+        self.assertFalse(egr["tests"][0]["passed"])          # demo EGR fails (out of limits)
+
     def test_readiness(self):
         c = FordScopeController()
         c.connect(DEMO_PORT)
@@ -372,6 +383,15 @@ class ServerTests(unittest.TestCase):
 
     def test_dtc_states_before_connect_returns_409(self):
         status, _raw = self._req("GET", "/api/dtc-states")
+        self.assertEqual(status, 409)
+
+    def test_monitor_tests_endpoint(self):
+        self._json("POST", "/api/connect", {"port": DEMO_PORT})
+        _s, j = self._json("GET", "/api/monitor-tests")
+        self.assertIn("Catalyst Monitor Bank 1", {m["category"] for m in j["monitors"]})
+
+    def test_monitor_tests_before_connect_returns_409(self):
+        status, _raw = self._req("GET", "/api/monitor-tests")
         self.assertEqual(status, 409)
 
     def test_report_endpoint(self):
