@@ -139,6 +139,35 @@ class TransportTests(unittest.TestCase):
         for expected in (b"ATZ\r", b"ATE0\r", b"ATH1\r", b"ATCAF0\r", b"ATSP6\r"):
             self.assertIn(expected, written)
 
+    def test_open_survives_realistic_clone_adapter_quirks(self):
+        # A real ELM327 clone's init is noisy: ATZ returns a version banner, a command
+        # can echo before ATE0 takes effect, protocol detection emits "SEARCHING...".
+        # open() must consume all of it (each _read_until_prompt reads to the '>' prompt)
+        # and must NOT leak the version-string noise as a fake CAN frame. (Live TIMING is
+        # NEEDS ON-CAR CHECK; this pins the codec's robustness to the wire CONTENT.)
+        class QuirkyPort:
+            def __init__(self):
+                self._q = [
+                    b"\r\rELM327 v1.5\r\r>",   # ATZ -> version banner
+                    b"ATE0\rOK\r>",           # echo before ATE0 takes effect, then OK
+                    b"OK\r>", b"OK\r>", b"OK\r>", b"OK\r>",  # ATL0/ATS1/ATH1/ATCAF0
+                    b"SEARCHING...\rOK\r>",   # ATSP -> protocol search
+                ]
+
+            def write(self, data):
+                return len(data)
+
+            def read(self, n=1):
+                return self._q.pop(0) if self._q else b">"
+
+            def close(self):
+                pass
+
+        t = Elm327Transport(QuirkyPort())
+        t.open()
+        self.assertTrue(t.is_open)
+        self.assertIsNone(t.recv())  # version-string / SEARCHING noise must not become a frame
+
     def test_send_sets_header_then_payload(self):
         port = FakeSerial()
         t = Elm327Transport(port)
