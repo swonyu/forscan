@@ -22,6 +22,7 @@ from .asbuilt import (
     NoBackupError,
 )
 from .asbuilt_format import AsBuiltBlock, parse_block, compute_checksum
+from .features import FeatureDefinition, FeatureCoder, EXAMPLE_FEATURES
 
 __all__ = [
     "AddressPair",
@@ -44,4 +45,7 @@ __all__ = [
     "AsBuiltBlock",
     "parse_block",
     "compute_checksum",
+    "FeatureDefinition",
+    "FeatureCoder",
+    "EXAMPLE_FEATURES",
 ]

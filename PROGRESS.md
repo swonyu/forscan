@@ -44,6 +44,9 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
       (`read_as_built`/`code_as_built`). Checksum convention documented + confirm-on-vehicle.
 - [x] 4.3 Guarded write with read-back verify + rollback (in 4.1: `write_block` verifies,
       `restore_block` rolls back; `VerificationError` on mismatch)
+- [x] 4.4 Named feature definitions (`ford/features.py`): `FeatureDefinition` (block+byte+nibble+
+      options), `FeatureCoder` read/set by name via the safe path. Mechanism authoritative;
+      `EXAMPLE_FEATURES` shipped UNVERIFIED (honesty test enforces the flag).
 
 ## Phase 3 — Reflashing (Tier 5, gated)
 - [ ] 5.1 Flashing state machine (0x27/0x34/0x36/0x37), stubbed — needs FDRS keys/calibrations
@@ -138,3 +141,9 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   `format`. Coder bridge `read_as_built`/`code_as_built` (parse → edit → safe write → restore).
   +14 tests incl. checksum validity, nibble edits, round-trip, and a full read→edit→code→restore
   through the coder (165 total, `Ran 165 tests … OK`). Next: 4.4 named feature definitions.
+- **Iter 14** — Named As-Built features (`ford/features.py`). `FeatureDefinition` (key/name/module/
+  did/label/byte/nibble/options) with `current_option` + `apply`; `FeatureCoder.read_feature`/
+  `set_feature` (read→apply→safe backup/write/verify→restorable). Mechanism authoritative;
+  `EXAMPLE_FEATURES` (fog-DRL / gauge-sweep / double-honk) shipped explicitly UNVERIFIED. +8 tests
+  incl. a full set→verify→restore and an honesty test that FAILS if any example lacks the
+  UNVERIFIED flag (173 total, `Ran 173 tests … OK`). **Phase 2 As-Built core complete.**
