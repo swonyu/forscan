@@ -991,6 +991,15 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   docs (README was the only remaining sibling), fixed it to the exact banner, and generalized the guard
   → `test_docs_quote_the_exact_live_banner` now covers BOTH docs (subTest per file), so the class can't
   drift again. No net test count change (renamed+extended the guard). 444 green.
+- **Iter 127** (proactive class guard — README command list ↔ argparse) — Applied iter-126's explicit
+  lesson ("guard the class BEFORE it drifts, like the banner did") to the next doc-quotes-code literal:
+  the README's CLI command reference. Verified it's currently EXACT (11/11 vs the real argparse
+  subcommands, no missing/extra), so no fix — but added `test_readme_documents_every_cli_command`, which
+  iterates the REAL `_build_parser` subcommands and asserts each appears in the README (subTest per
+  command). Fails if a command is added to the CLI but left undocumented (a real command missing =
+  undiscoverable). Teeth proven by measurement: real commands document True, a hypothetical
+  `reflash-BOGUS` False. This is the correct proactive application of the guard-the-class lesson (the
+  banner had to drift first; this one won't). +1 test → **445 green**.
 - **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the

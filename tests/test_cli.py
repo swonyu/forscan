@@ -111,6 +111,21 @@ class CliTests(unittest.TestCase):
                 with open(os.path.join(repo_root, doc)) as fh:
                     self.assertIn(exact, fh.read())
 
+    def test_readme_documents_every_cli_command(self):
+        # Drift guard, applied PROACTIVELY per iter-126's lesson ("guard the class before
+        # it drifts like the banner did"): every real argparse subcommand must appear in
+        # the README's command reference so the user can discover it. Fails if a command
+        # is added to the CLI but not documented (a real command missing = undiscoverable).
+        from fordscope.cli import _build_parser
+        subs = next(a.choices for a in _build_parser()._actions
+                    if a.__class__.__name__ == "_SubParsersAction")
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(repo_root, "README.md")) as fh:
+            readme = fh.read()
+        for cmd in subs:
+            with self.subTest(command=cmd):
+                self.assertIn(f"`{cmd}", readme)  # documented as a `code` reference
+
     def test_no_command_prints_help(self):
         code, out, _ = run()
         self.assertEqual(code, 1)
