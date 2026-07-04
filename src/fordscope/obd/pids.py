@@ -43,6 +43,26 @@ def _module_voltage(d: bytes) -> float:
     return _u16(d) / 1000.0
 
 
+def _load_u16(d: bytes) -> float:
+    return _u16(d) * 100.0 / 255.0
+
+
+def _cat_temp(d: bytes) -> float:
+    return _u16(d) / 10.0 - 40.0
+
+
+def _equiv_ratio(d: bytes) -> float:
+    return _u16(d) / 32768.0
+
+
+def _fuel_rate(d: bytes) -> float:
+    return _u16(d) / 20.0
+
+
+def _count(d: bytes) -> int:
+    return d[0]
+
+
 @dataclass(frozen=True)
 class PidDef:
     name: str
@@ -77,6 +97,26 @@ PID_TABLE = {
     0x33: PidDef("Absolute barometric pressure", 1, lambda d: float(d[0]), "kPa"),
     0x42: PidDef("Control module voltage", 2, _module_voltage, "V"),
     0x46: PidDef("Ambient air temperature", 1, _temp_minus40, "degC"),
+    # --- additional common Mode 01 PIDs (formulas hand-verified vs SAE J1979) ---
+    0x08: PidDef("Short term fuel trim, Bank 2", 1, _fuel_trim, "%"),
+    0x09: PidDef("Long term fuel trim, Bank 2", 1, _fuel_trim, "%"),
+    0x1F: PidDef("Run time since engine start", 2, _u16, "s"),
+    0x21: PidDef("Distance with MIL on", 2, _u16, "km"),
+    0x2C: PidDef("Commanded EGR", 1, _percent_255, "%"),
+    0x2D: PidDef("EGR error", 1, _fuel_trim, "%"),
+    0x2E: PidDef("Commanded evaporative purge", 1, _percent_255, "%"),
+    0x30: PidDef("Warm-ups since codes cleared", 1, _count, "count"),
+    0x31: PidDef("Distance since codes cleared", 2, _u16, "km"),
+    0x3C: PidDef("Catalyst temperature Bank 1 Sensor 1", 2, _cat_temp, "degC"),
+    0x43: PidDef("Absolute load value", 2, _load_u16, "%"),
+    0x44: PidDef("Commanded equivalence ratio", 2, _equiv_ratio, "ratio"),
+    0x45: PidDef("Relative throttle position", 1, _percent_255, "%"),
+    0x47: PidDef("Absolute throttle position B", 1, _percent_255, "%"),
+    0x4C: PidDef("Commanded throttle actuator", 1, _percent_255, "%"),
+    0x4D: PidDef("Time run with MIL on", 2, _u16, "min"),
+    0x4E: PidDef("Time since codes cleared", 2, _u16, "min"),
+    0x5C: PidDef("Engine oil temperature", 1, _temp_minus40, "degC"),
+    0x5E: PidDef("Engine fuel rate", 2, _fuel_rate, "L/h"),
 }
 
 

@@ -57,6 +57,43 @@ class PidDecodeTests(unittest.TestCase):
         with self.assertRaises(KeyError):
             decode_pid(0xEE, bytes([0]))
 
+
+class ExtendedPidDecodeTests(unittest.TestCase):
+    """Hand-derived from SAE J1979 for the added Mode 01 PIDs."""
+
+    def test_run_time(self):
+        r = decode_pid(0x1F, bytes([0x01, 0x00]))  # 256*1 + 0
+        self.assertEqual(r.value, 256)
+        self.assertEqual(r.unit, "s")
+
+    def test_commanded_egr(self):
+        self.assertEqual(decode_pid(0x2C, bytes([0xFF])).value, 100.0)
+
+    def test_egr_error_signed(self):
+        self.assertEqual(decode_pid(0x2D, bytes([128])).value, 0.0)
+        self.assertEqual(decode_pid(0x2D, bytes([192])).value, 50.0)
+
+    def test_oil_temp(self):
+        self.assertEqual(decode_pid(0x5C, bytes([90])).value, 50)  # 90 - 40
+
+    def test_equivalence_ratio(self):
+        self.assertEqual(decode_pid(0x44, bytes([0x80, 0x00])).value, 1.0)  # 32768/32768
+
+    def test_catalyst_temperature(self):
+        self.assertEqual(decode_pid(0x3C, bytes([0x0F, 0xA0])).value, 360.0)  # 4000/10 - 40
+
+    def test_absolute_load(self):
+        self.assertEqual(decode_pid(0x43, bytes([0x00, 0xFF])).value, 100.0)  # 255*100/255
+
+    def test_time_with_mil(self):
+        self.assertEqual(decode_pid(0x4D, bytes([0x00, 0x0A])).value, 10)  # minutes
+
+    def test_engine_fuel_rate(self):
+        self.assertEqual(decode_pid(0x5E, bytes([0x00, 0x14])).value, 1.0)  # 20/20
+
+    def test_warm_ups_count(self):
+        self.assertEqual(decode_pid(0x30, bytes([0x05])).value, 5)
+
     def test_short_data_raises(self):
         with self.assertRaises(ValueError):
             decode_pid(0x0C, bytes([0x0F]))  # RPM needs 2 bytes

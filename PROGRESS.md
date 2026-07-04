@@ -22,7 +22,8 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
       session control, ECU reset, tester-present, Read/WriteDataByIdentifier + `SimulatedUdsEcu`
 - [x] 1.3 OBD-II (SAE J1979): `ObdClient` — Mode 01 current data, 03/07/0A DTC reads, 04 clear,
       09 VIN; positive/negative handling; `SimulatedObdEcu`
-- [x] 1.4 PID decode table: 16 common PIDs (RPM/coolant/MAF/MAP/fuel-trims/speed/throttle/…) with units
+- [x] 1.4 PID decode table: 35 common Mode 01 PIDs with units (RPM/coolant/MAF/MAP/fuel-trims/speed/
+      throttle/EGR/catalyst-temp/lambda/oil-temp/run-time/fuel-rate/…), formulas hand-verified vs J1979
 - [x] 1.5 DTC read/clear (in 1.3) + DTC-definition database: curated generic table + structural
       fallback that flags uncurated/manufacturer codes instead of inventing a meaning
 - [x] 2.1 Ford enhanced addressing: 11-bit (legislated + Ford +8) and 29-bit normal-fixed
@@ -270,6 +271,12 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
   disposition (samples capped at 1000) + a "Download log (CSV)" button (`window.location` →
   browser download). +3 tests; verified by running (200, `text/csv`, attachment, real rows).
   294 total, `Ran 294 tests … OK`.
+- **Iter 34** — Widened PID coverage 16 → **35** Mode 01 decoders (fuel-trim bank 2, run time,
+  distance-with-MIL, commanded/error EGR, evap purge, warm-ups, catalyst temp, absolute load,
+  equivalence ratio/lambda, throttle variants, MIL time, oil temp, fuel rate, …). Every formula
+  hand-verified vs SAE J1979; +10 tests with hand-derived values (the scaling is exactly where a
+  wrong reading would hide). 304 total, `Ran 304 tests … OK`. The Mac app's "Supported PIDs" now
+  names far more of what a car reports.
 - **Iter 27** — Completed adversarial review coverage (CLI + scan services, the last un-reviewed
   logic). **1 more real bug found & fixed test-first** (268 total green): `scan_module` /
   `scan_module_dtcs` only caught `UdsError`, but `IsoTpSocket` raises a separate `IsoTpError`
