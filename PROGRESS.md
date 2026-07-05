@@ -20,8 +20,12 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
       PassThru library landed (iter 140, `transport/j2534.py`): open→connect(raw CAN)→pass-all filter,
       send/recv marshalling CanFrame<->PASSTHRU_MSG, transmit-loopback (TX_MSG_TYPE) + malformed-record
       skip, disconnect-then-close with fd-release-on-error; proven full-stack (J2534→ISO-TP→OBD: SF RPM
-      + multiframe VIN) over a scripted fake, exactly as slcan/elm327. Still TODO: the real `PassThru*`
-      .dylib binding (ctypes) [NEEDS ON-CAR CHECK].
+      + multiframe VIN) over a scripted fake, exactly as slcan/elm327. The C ABI struct landed too
+      (iter 141, `transport/j2534.py`): `CPassThruMsg` (`ctypes.Structure`, 6×`c_uint32` + `Data[4128]`,
+      spec `sizeof`=4152) + `pack_msg`/`unpack_msg` marshalling to the dataclass — layout hand-derived
+      from SAE J2534-1 (offsets 0/4/8/12/16/20, Data@24), the size test straddles the `c_ulong`=8-byte
+      LP64 trap (4176). Still TODO: LOADING + CALLING the vendor `.dylib` over ctypes (`cdll`, the
+      `PassThru*` function prototypes), which is [NEEDS ON-CAR CHECK].
 - [x] 1.1a ISO-TP frame codec: SF/FF/CF/FC encode + parse (pure, hand-derived fixtures)
 - [x] 1.1b ISO-TP transport layer: `IsoTpSocket` send/recv + flow control; `SimulatedIsoTpEcu`
       (reusable simulated endpoint). BS=0 both ways; client send honours ECU block-size>0.
@@ -1424,3 +1428,18 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   every new positive path firing in the `-v` output, then the canonical suite: baseline 575 →
   **`Ran 594 tests in 2.062s … OK`**. No forbidden category touched (raw-CAN pipe, same tier as
   slcan/elm327; no SecurityAccess crack, no emissions/immobilizer, no real-vehicle I/O).
+- **Iter 141** — Box 0.2 next slice: the **J2534-1 `PASSTHRU_MSG` C ABI** — `CPassThruMsg`
+  (`ctypes.Structure`) + `pack_msg`/`unpack_msg` (`transport/j2534.py`), the binary face the real
+  vendor `.dylib` reads/writes. Layout **hand-derived from SAE J2534-1** (confirmed vs the published
+  spec + v0404 headers): six `unsigned long` fields then `unsigned char Data[4128]`; `unsigned long`
+  is 32-bit in the Windows-origin J2534 ABI, so the leading fields are `c_uint32` (NOT `c_ulong`,
+  8-byte under LP64 — the trap), giving `sizeof` = 6*4+4128 = **4152** with fields at 0/4/8/12/16/20
+  and Data@24. `pack_msg` sets `DataSize`=len + zero-fills the tail (ValueError on >4128 overflow);
+  `unpack_msg` reads exactly `DataSize` bytes (no stale-tail leak). +9 tests, **RED-first** (ImportError
+  before impl): size 4152, per-field 4-byte-width straddle, offset order, Data capacity 4128, pack
+  datasize/copy + flags/timestamp, unpack-only-DataSize, std/ext roundtrip, 4128-ok/4129-raises
+  straddle. Verified by RUNNING: the 9 new positives all fired in `-v`; the 4152-vs-`c_ulong`-4176
+  straddle confirmed real on this platform (measured `sizeof(c_ulong)`=8); canonical suite baseline
+  594 → **`Ran 603 tests in 2.028s … OK`**. Still TODO on 0.2 (unchanged): LOADING + CALLING the
+  vendor `.dylib` (`cdll` + `PassThru*` prototypes) — **[NEEDS ON-CAR CHECK]**, no hardware in this
+  loop. No forbidden category touched (pure struct marshalling; same raw-CAN tier as slcan/elm327).

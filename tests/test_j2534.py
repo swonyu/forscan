@@ -6,6 +6,7 @@ the ``CAN_29BIT_ID`` (0x100) bit in ``TxFlags``/``RxStatus`` marks a 29-bit exte
 ID. The real ``PassThru*`` C entry points (a vendor .dylib over ctypes) are out of
 scope here and are [NEEDS ON-CAR CHECK]; only the pure marshalling is proven.
 """
+import ctypes
 import unittest
 
 from fordscope.transport import (
@@ -14,6 +15,10 @@ from fordscope.transport import (
     TransportNotOpen,
     J2534Transport,
     PassThruMsg,
+    CPassThruMsg,
+    pack_msg,
+    unpack_msg,
+    PASSTHRU_MSG_DATA_LEN,
     encode_can_message,
     parse_can_message,
     can_baudrate,
@@ -419,6 +424,94 @@ class J2534EndToEndReadTests(unittest.TestCase):
         with self.assertRaises(ObdError) as ctx:
             obd.current_data(0x0C)
         self.assertIn("no response", str(ctx.exception))
+
+
+class PassThruMsgCAbiTests(unittest.TestCase):
+    """The ctypes image of the J2534-1 ``PASSTHRU_MSG`` C struct — the binary face
+    the real vendor ``.dylib`` reads/writes over ctypes. Every expected value is
+    hand-derived from SAE J2534-1 (confirmed vs the published spec + v0404 headers):
+
+        unsigned long ProtocolID, RxStatus, TxFlags, Timestamp, DataSize, ExtraDataIndex;
+        unsigned char Data[4128];
+
+    ``unsigned long`` is 32-bit in the J2534 (Windows-origin) ABI, so the struct is
+    6*4 + 4128 = 4152 bytes with fields at 4-byte offsets. Loading and CALLING the
+    real ``.dylib`` remains [NEEDS ON-CAR CHECK]; only this pure marshalling is proven.
+    """
+
+    def test_struct_size_is_4152_spec_exact(self):
+        # 6 four-byte unsigned longs + Data[4128] = 24 + 4128 = 4152.
+        self.assertEqual(ctypes.sizeof(CPassThruMsg), 4152)
+
+    def test_leading_fields_are_4_bytes_not_8(self):
+        # STRADDLE: J2534 `unsigned long` is 32-bit. Using c_ulong (8 bytes under LP64
+        # on macOS/Linux) would silently double every field's width and mis-align the
+        # struct (sizeof 4176) -> pin each leading field to 4 bytes.
+        for name in ("ProtocolID", "RxStatus", "TxFlags", "Timestamp",
+                     "DataSize", "ExtraDataIndex"):
+            self.assertEqual(getattr(CPassThruMsg, name).size, 4, name)
+
+    def test_field_offsets_match_spec_order(self):
+        # Spec field order at 4-byte strides, Data immediately after the 6 longs.
+        expected = {
+            "ProtocolID": 0, "RxStatus": 4, "TxFlags": 8, "Timestamp": 12,
+            "DataSize": 16, "ExtraDataIndex": 20, "Data": 24,
+        }
+        for name, off in expected.items():
+            self.assertEqual(getattr(CPassThruMsg, name).offset, off, name)
+
+    def test_data_capacity_is_4128(self):
+        self.assertEqual(PASSTHRU_MSG_DATA_LEN, 4128)
+        self.assertEqual(getattr(CPassThruMsg, "Data").size, 4128)
+
+    def test_pack_sets_datasize_and_copies_data(self):
+        # Raw-CAN PASSTHRU_MSG for ID 0x7DF + payload 02 01 0C: Data = 00 00 07 DF 02
+        # 01 0C (7 bytes), DataSize = 7, ProtocolID = CAN(5), trailing array zeroed.
+        c = pack_msg(PassThruMsg(PROTOCOL_CAN, bytes.fromhex("000007DF02010C")))
+        self.assertEqual(c.ProtocolID, PROTOCOL_CAN)
+        self.assertEqual(c.DataSize, 7)
+        self.assertEqual(bytes(c.Data[:7]), bytes.fromhex("000007DF02010C"))
+        self.assertEqual(c.Data[7], 0)  # remainder of the fixed array stays zero
+
+    def test_pack_carries_flags_and_timestamp(self):
+        c = pack_msg(PassThruMsg(PROTOCOL_CAN, b"\x00\x00\x01\x23",
+                                 tx_flags=CAN_29BIT_ID, rx_status=TX_MSG_TYPE,
+                                 timestamp=1234))
+        self.assertEqual(c.TxFlags, CAN_29BIT_ID)
+        self.assertEqual(c.RxStatus, TX_MSG_TYPE)
+        self.assertEqual(c.Timestamp, 1234)
+
+    def test_unpack_reads_only_datasize_bytes(self):
+        # Only the first DataSize bytes of the fixed 4128-byte Data array are valid; a
+        # stale byte parked beyond DataSize must NOT leak into the decoded payload.
+        c = CPassThruMsg()
+        c.ProtocolID = PROTOCOL_CAN
+        valid = bytes.fromhex("000007E8410C0FA0")  # ID 0x7E8 + 41 0C 0F A0 (8 bytes)
+        for i, b in enumerate(valid):
+            c.Data[i] = b
+        c.Data[8] = 0xEE                            # stale trailing byte past DataSize
+        c.DataSize = 8
+        msg = unpack_msg(c)
+        self.assertEqual(msg.data, valid)           # exactly 8 bytes, no 0xEE
+        self.assertEqual(msg.protocol_id, PROTOCOL_CAN)
+
+    def test_pack_unpack_roundtrip_std_and_ext(self):
+        # pack -> unpack restores every dataclass field, for a standard and an
+        # extended (29-bit) message.
+        for msg in (
+            PassThruMsg(PROTOCOL_CAN, bytes.fromhex("000007DF02010C")),
+            PassThruMsg(PROTOCOL_CAN, bytes.fromhex("18DAF11022F190"),
+                        tx_flags=CAN_29BIT_ID, rx_status=CAN_29BIT_ID),
+        ):
+            self.assertEqual(unpack_msg(pack_msg(msg)), msg)
+
+    def test_data_capacity_straddle_4128_ok_4129_raises(self):
+        # Exactly 4128 fits the fixed array; 4129 overflows -> ValueError, never a
+        # silent truncation or buffer overrun.
+        ok = pack_msg(PassThruMsg(PROTOCOL_CAN, bytes(PASSTHRU_MSG_DATA_LEN)))
+        self.assertEqual(ok.DataSize, PASSTHRU_MSG_DATA_LEN)
+        with self.assertRaises(ValueError):
+            pack_msg(PassThruMsg(PROTOCOL_CAN, bytes(PASSTHRU_MSG_DATA_LEN + 1)))
 
 
 if __name__ == "__main__":

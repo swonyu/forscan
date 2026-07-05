@@ -20,6 +20,7 @@ the slcan backend. The device's on-board ISO15765 protocol is deliberately unuse
 """
 from __future__ import annotations
 
+import ctypes
 from dataclasses import dataclass
 from typing import Optional
 
@@ -123,6 +124,75 @@ class PassThruMsg:
     tx_flags: int = 0
     rx_status: int = 0
     timestamp: int = 0
+
+
+# --- The J2534-1 PASSTHRU_MSG C ABI (the binary face of the real .dylib) --------
+# SAE J2534-1 defines PASSTHRU_MSG as six unsigned-long fields then a byte array:
+#     unsigned long ProtocolID, RxStatus, TxFlags, Timestamp, DataSize, ExtraDataIndex;
+#     unsigned char Data[4128];
+# J2534 is a Windows-origin API where `unsigned long` is 32-bit, so the leading
+# fields are ``c_uint32`` — NOT ``c_ulong``, which is 64-bit under LP64 on macOS/
+# Linux and would silently double every field width (sizeof 4176) and mis-align the
+# struct. Spec sizeof = 6*4 + 4128 = 4152. The eventual real backend hands arrays of
+# these to ``PassThruReadMsgs``/``PassThruWriteMsgs``; LOADING and CALLING that
+# vendor ``.dylib`` over ctypes is **[NEEDS ON-CAR CHECK]** — only the layout +
+# marshalling below are proven here, with no hardware attached.
+PASSTHRU_MSG_DATA_LEN = 4128
+
+
+class CPassThruMsg(ctypes.Structure):
+    """ctypes image of the J2534-1 ``PASSTHRU_MSG`` C struct (see notes above)."""
+
+    _fields_ = [
+        ("ProtocolID", ctypes.c_uint32),
+        ("RxStatus", ctypes.c_uint32),
+        ("TxFlags", ctypes.c_uint32),
+        ("Timestamp", ctypes.c_uint32),
+        ("DataSize", ctypes.c_uint32),
+        ("ExtraDataIndex", ctypes.c_uint32),
+        ("Data", ctypes.c_ubyte * PASSTHRU_MSG_DATA_LEN),
+    ]
+
+
+def pack_msg(msg: PassThruMsg) -> CPassThruMsg:
+    """``PassThruMsg`` dataclass -> the C ``PASSTHRU_MSG`` the ``.dylib`` expects.
+
+    Copies ``data`` into ``Data`` and sets ``DataSize`` to its length (the count of
+    valid leading bytes); the rest of the fixed 4128-byte ``Data`` array stays zero.
+    Raises ``ValueError`` if ``data`` overflows the array rather than truncating or
+    overrunning it.
+    """
+    if len(msg.data) > PASSTHRU_MSG_DATA_LEN:
+        raise ValueError(
+            f"PASSTHRU_MSG Data holds at most {PASSTHRU_MSG_DATA_LEN} bytes, "
+            f"got {len(msg.data)}"
+        )
+    c = CPassThruMsg()
+    c.ProtocolID = msg.protocol_id
+    c.TxFlags = msg.tx_flags
+    c.RxStatus = msg.rx_status
+    c.Timestamp = msg.timestamp
+    c.DataSize = len(msg.data)
+    for i, b in enumerate(msg.data):
+        c.Data[i] = b
+    return c
+
+
+def unpack_msg(c: CPassThruMsg) -> PassThruMsg:
+    """The C ``PASSTHRU_MSG`` -> a ``PassThruMsg`` dataclass.
+
+    Only the first ``DataSize`` bytes of ``Data`` are valid payload (per spec); the
+    rest of the fixed array is ignored, so a struct buffer reused across reads never
+    leaks stale trailing bytes into the decoded frame.
+    """
+    data = bytes(c.Data[: c.DataSize])
+    return PassThruMsg(
+        protocol_id=c.ProtocolID,
+        data=data,
+        tx_flags=c.TxFlags,
+        rx_status=c.RxStatus,
+        timestamp=c.Timestamp,
+    )
 
 
 # Fixed PassThruWriteMsgs timeout (ms): transmit is near-instant on a live bus, so
