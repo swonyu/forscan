@@ -7,9 +7,11 @@ import unittest
 
 from fordscope.cli import (
     main, DEMO_VIN, open_backend, default_modules, modules_for_profile,
-    _feature_coder_for, build_demo_vehicle,
+    _feature_coder_for, build_demo_vehicle, _obd_client,
 )
-from fordscope.transport import SlcanTransport, Elm327Transport
+from fordscope.transport import (
+    SlcanTransport, Elm327Transport, J2534Transport, PassThruMsg, PROTOCOL_CAN,
+)
 from fordscope.ford import fusion_2016, FeatureDefinition
 
 
@@ -34,10 +36,48 @@ def fake_port_factory(_name):
     return FakeSerial()
 
 
-def run(*argv, port_factory=None):
+class ScriptedJ2534Pt:
+    """Minimal J2534 'pt' duck-type for CLI-wiring tests: open/connect/filter succeed;
+    each write_msgs arms the next scripted PassThruReadMsgs block for the following
+    read_msgs. Enough to drive J2534Transport -> IsoTpSocket -> ObdClient with no
+    hardware (mirrors test_j2534's ScriptedPassThruLibrary)."""
+
+    def __init__(self, blocks=()):
+        self._blocks = list(blocks)
+        self._armed = None
+
+    def open(self):
+        return 1
+
+    def connect(self, *args):
+        return 2
+
+    def start_msg_filter(self, *args):
+        return 0
+
+    def write_msgs(self, channel_id, msgs, timeout):
+        if self._blocks:
+            self._armed = self._blocks.pop(0)
+
+    def read_msgs(self, channel_id, timeout):
+        block, self._armed = self._armed, None
+        return block or []
+
+    def disconnect(self, channel_id):
+        pass
+
+    def close(self, device_id):
+        pass
+
+
+def fake_pt_factory(_lib_path):
+    return ScriptedJ2534Pt()
+
+
+def run(*argv, port_factory=None, pt_factory=None):
     out, err = io.StringIO(), io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        code = main(list(argv), port_factory=port_factory)
+        code = main(list(argv), port_factory=port_factory, pt_factory=pt_factory)
     return code, out.getvalue(), err.getvalue()
 
 
@@ -96,6 +136,20 @@ class CliTests(unittest.TestCase):
         self.assertIn("UNVALIDATED", out)
         self.assertIn("NEEDS ON-CAR CHECK", out)
         # Silent fake bus -> every module reads as not present (honest, no fake data).
+        self.assertIn("not present", out)
+
+    def test_j2534_backend_reachable_from_main_and_labels_unvalidated(self):
+        # The whole point of wiring j2534 into the CLI: `--backend j2534 --port <lib>`
+        # must be reachable from argv, print the UNVALIDATED live banner, and (over a
+        # silent injected pt) honestly report every module absent rather than fake data.
+        code, out, _ = run(
+            "--backend", "j2534", "--port", "/opt/j2534/openport.dylib", "scan",
+            pt_factory=fake_pt_factory,
+        )
+        self.assertEqual(code, 0)
+        self.assertIn("LIVE", out)
+        self.assertIn("j2534", out)
+        self.assertIn("NEEDS ON-CAR CHECK", out)
         self.assertIn("not present", out)
 
     def test_docs_quote_the_exact_live_banner(self):
@@ -552,6 +606,54 @@ class OpenBackendTests(unittest.TestCase):
         self.assertIsInstance(bus, Elm327Transport)
         self.assertIn("elm327", banner)
 
+    def test_j2534_constructs_open_transport_and_labels_unvalidated(self):
+        # The J2534/Openport backend is wired like slcan/elm327: an injected fake pt
+        # stands in for the vendor .dylib. open_backend must build a J2534Transport,
+        # OPEN it (connect + pass-all filter), and hand back the UNVALIDATED live banner.
+        bus, modules, banner = open_backend(
+            "j2534", "/opt/j2534/openport.dylib", pt_factory=fake_pt_factory
+        )
+        self.assertIsInstance(bus, J2534Transport)
+        self.assertTrue(bus.is_open)                 # positive path: open() actually ran
+        self.assertIn("LIVE", banner)
+        self.assertIn("j2534", banner)
+        self.assertIn("NEEDS ON-CAR CHECK", banner)
+        self.assertEqual(modules, default_modules())
+
+    def test_j2534_backend_decodes_a_real_pid_end_to_end(self):
+        # Wiring proof: a Mode 01 PID 0C single-frame reply carried over the wired
+        # j2534 backend must decode to 1000 rpm. Hand-derived from SAE J1979
+        # (PID 0x0C engine RPM = ((A*256)+B)/4): payload 41 0C 0F A0 ->
+        # ((0x0F*256)+0xA0)/4 = (3840+160)/4 = 1000.0 rpm. Data blob = 4-byte BE
+        # id 0x7E8 + PCI SF(len 4) 04 + 41 0C 0F A0, zero-padded.
+        rpm_block = [PassThruMsg(PROTOCOL_CAN, bytes.fromhex("000007E8" + "04410C0FA0000000"))]
+        bus, _modules, _banner = open_backend(
+            "j2534", "/x", pt_factory=lambda _p: ScriptedJ2534Pt([rpm_block])
+        )
+        reading = _obd_client(bus).current_data(0x0C)
+        self.assertEqual(
+            (reading.name, reading.value, reading.unit), ("Engine RPM", 1000.0, "rpm")
+        )
+
+    def test_j2534_open_failure_closes_the_transport(self):
+        # If connect/filter fails after the device is claimed, open_backend must
+        # release it (transport.close()) so a retry doesn't leave the adapter busy.
+        class FailingPt(ScriptedJ2534Pt):
+            def __init__(self):
+                super().__init__()
+                self.closed = False
+
+            def connect(self, *args):
+                raise RuntimeError("adapter connect failed")
+
+            def close(self, device_id):
+                self.closed = True
+
+        pt = FailingPt()
+        with self.assertRaises(RuntimeError):
+            open_backend("j2534", "/x", pt_factory=lambda _p: pt)
+        self.assertTrue(pt.closed)
+
     def test_live_backend_without_port_raises(self):
         with self.assertRaises(ValueError):
             open_backend("slcan", None)
@@ -589,9 +691,12 @@ class OpenBackendTests(unittest.TestCase):
         self.assertTrue(backend_action.choices, "expected --backend to define choices")
         for choice in backend_action.choices:
             with self.subTest(backend=choice):
-                # simulator ignores the port; live backends consume the fake one.
+                # simulator ignores the port; serial backends consume the fake serial
+                # port; j2534 consumes the fake pt. Supplying both injections keeps this
+                # guard exercising EVERY choice through its real construction path.
                 _bus, _modules, banner = open_backend(
-                    choice, "/dev/x", port_factory=fake_port_factory
+                    choice, "/dev/x",
+                    port_factory=fake_port_factory, pt_factory=fake_pt_factory,
                 )
                 self.assertIsInstance(banner, str)
                 self.assertTrue(banner)

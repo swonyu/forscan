@@ -1,10 +1,11 @@
 """FordScope command-line interface.
 
 Runs against a **simulated** demo vehicle by default; every simulator command prints a
-clear SIMULATED banner. The two real-hardware backends (``--backend slcan`` and
-``--backend elm327``, both needing ``--port``) carry real, unit-tested codecs but are
-UNVALIDATED on-car: they announce a ``NEEDS ON-CAR CHECK`` banner rather than pretend to
-be trustworthy, and must be verified against a real vehicle before being relied on.
+clear SIMULATED banner. The three real-hardware backends (``--backend slcan``,
+``--backend elm327``, and ``--backend j2534``, all needing ``--port``) carry real,
+unit-tested codecs but are UNVALIDATED on-car: they announce a ``NEEDS ON-CAR CHECK``
+banner rather than pretend to be trustworthy, and must be verified against a real
+vehicle before being relied on.
 
 Run it:  PYTHONPATH=src python -m fordscope scan
 """
@@ -14,7 +15,14 @@ import argparse
 import sys
 from typing import List, Optional, Tuple
 
-from .transport import SimulatorTransport, SlcanTransport, Elm327Transport
+from .transport import (
+    SimulatorTransport,
+    SlcanTransport,
+    Elm327Transport,
+    J2534Transport,
+    PassThruAdapter,
+    load_library,
+)
 from .isotp import IsoTpSocket, SimulatedIsoTpEcu, multiplex
 from .obd import SimulatedObdEcu, ObdClient
 from .uds import SimulatedUdsEcu, UdsDtc, STATUS_CONFIRMED, UdsClient
@@ -231,11 +239,23 @@ def _open_serial(port_name: str):
     return serial.Serial(port_name, baudrate=115200, timeout=1.0)
 
 
-def open_backend(backend: str, port, *, port_factory=None, profile=None):
+def _open_j2534(lib_path: str):  # pragma: no cover - needs a real vendor .dylib + adapter
+    """Load a J2534 vendor library and present the transport's ``pt`` duck-type.
+
+    Reached only on the live ``j2534`` backend; loading a real Openport/Tactrix
+    ``.dylib`` and calling into it needs the adapter + vendor driver and is
+    **[NEEDS ON-CAR CHECK]**. Tests inject a fake ``pt`` via ``pt_factory`` instead.
+    """
+    return PassThruAdapter(load_library(lib_path))
+
+
+def open_backend(backend: str, port, *, port_factory=None, pt_factory=None, profile=None):
     """Return (transport, modules, banner) for the chosen backend.
 
-    port_factory lets tests inject a fake serial port; production uses pyserial.
-    profile overrides the module list (e.g. 'fusion2016' = confirmed-tier 2016 Fusion map).
+    port_factory lets tests inject a fake serial port (slcan/elm327); pt_factory lets
+    tests inject a fake J2534 ``pt`` (j2534). Production uses pyserial / the vendor
+    ``.dylib``. profile overrides the module list (e.g. 'fusion2016' = confirmed-tier
+    2016 Fusion map).
     """
     profile_modules = modules_for_profile(profile)
     if backend == "simulator":
@@ -243,6 +263,22 @@ def open_backend(backend: str, port, *, port_factory=None, profile=None):
         return bus, (profile_modules if profile_modules is not None else demo), BANNER
     if port is None:
         raise ValueError(f"--port is required for the '{backend}' backend")
+    if backend == "j2534":
+        # `port` carries the vendor J2534 driver .dylib path (Openport/Tactrix on macOS).
+        opener = pt_factory or _open_j2534
+        transport = J2534Transport(opener(port))
+        try:
+            transport.open()
+        except Exception:
+            # open() may have already claimed the device/channel before failing —
+            # release it so a failed retry doesn't leave the adapter busy.
+            try:
+                transport.close()
+            except Exception:
+                pass
+            raise
+        modules = profile_modules if profile_modules is not None else default_modules()
+        return transport, modules, LIVE_BANNER.format(backend=backend)
     opener = port_factory or _open_serial
     serial_port = opener(port)
     try:
@@ -304,14 +340,15 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--backend",
         default="simulator",
-        choices=["simulator", "slcan", "elm327"],
-        help="transport backend (default: simulator; slcan/elm327 need --port and are "
-        "UNVALIDATED on real hardware)",
+        choices=["simulator", "slcan", "elm327", "j2534"],
+        help="transport backend (default: simulator; slcan/elm327/j2534 need --port and "
+        "are UNVALIDATED on real hardware)",
     )
     parser.add_argument(
         "--port",
         default=None,
-        help="serial device for a live backend, e.g. /dev/tty.usbserial-XXXX",
+        help="live-backend device: a serial port for slcan/elm327 "
+        "(e.g. /dev/tty.usbserial-XXXX), or the vendor J2534 driver .dylib path for j2534",
     )
     parser.add_argument(
         "--profile",
@@ -393,7 +430,7 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[List[str]] = None, *, port_factory=None) -> int:
+def main(argv: Optional[List[str]] = None, *, port_factory=None, pt_factory=None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
@@ -484,7 +521,8 @@ def main(argv: Optional[List[str]] = None, *, port_factory=None) -> int:
 
     try:
         bus, modules, banner = open_backend(
-            args.backend, args.port, port_factory=port_factory, profile=args.profile
+            args.backend, args.port, port_factory=port_factory,
+            pt_factory=pt_factory, profile=args.profile
         )
     except Exception as exc:  # bad backend / missing port / serial open failed
         print(f"error: {exc}", file=sys.stderr)

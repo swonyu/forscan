@@ -40,9 +40,18 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
       `ERR_BUFFER_EMPTY` hand-derived from the SAE J2534-1 return-value table. Proven over
       an INJECTED `_FakeBoundLib` (callable C entry points, no hardware): per-method
       marshalling, the buffer-empty-vs-hard-error straddle, AND a full
-      `J2534Transport(PassThruAdapter(fake))` open->send->recv CAN round-trip. Still TODO:
-      LOADING the REAL vendor `.dylib` over `cdll` + CALLING these entry points on live
-      hardware — [NEEDS ON-CAR CHECK].
+      `J2534Transport(PassThruAdapter(fake))` open->send->recv CAN round-trip. The CLI
+      EXPOSURE landed too (iter 144, `cli.py`): `--backend j2534` (with `--port` = the
+      vendor driver `.dylib` path) builds `J2534Transport(PassThruAdapter(load_library(
+      path)))` behind an injectable `pt_factory` (prod default `_open_j2534`), carrying the
+      same LIVE / `NEEDS ON-CAR CHECK` banner + open-failure device-release as slcan/elm327
+      — so Openport is now reachable exactly like the other two real backends. Proven over
+      an injected fake pt: a full-stack `--backend j2534` Mode-01 PID-0C read decodes
+      **1000 rpm** end-to-end, open() actually connects + arms the pass-all filter, the
+      open-failure path releases the device, the every-`--backend`-choice invariant now
+      covers j2534, and it's reachable from `main()`/argv. Still TODO: LOADING the REAL
+      vendor `.dylib` over `cdll` + CALLING these entry points on live hardware —
+      [NEEDS ON-CAR CHECK].
 - [x] 1.1a ISO-TP frame codec: SF/FF/CF/FC encode + parse (pure, hand-derived fixtures)
 - [x] 1.1b ISO-TP transport layer: `IsoTpSocket` send/recv + flow control; `SimulatedIsoTpEcu`
       (reusable simulated endpoint). BS=0 both ways; client send honours ECU block-size>0.
@@ -1460,3 +1469,19 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   594 → **`Ran 603 tests in 2.028s … OK`**. Still TODO on 0.2 (unchanged): LOADING + CALLING the
   vendor `.dylib` (`cdll` + `PassThru*` prototypes) — **[NEEDS ON-CAR CHECK]**, no hardware in this
   loop. No forbidden category touched (pure struct marshalling; same raw-CAN tier as slcan/elm327).
+- **Iter 144** — Box 0.2 CLI exposure: wired the J2534/Openport backend into the CLI so it's
+  reachable exactly like slcan/elm327 (previously the whole `J2534Transport`+`PassThruAdapter`
+  stack was built + injection-tested but unreachable — `--backend` only offered simulator/slcan/
+  elm327). Added `--backend j2534` (`--port` = the vendor driver `.dylib` path) →
+  `open_backend` builds `J2534Transport(PassThruAdapter(load_library(path)))` behind an
+  injectable `pt_factory` (prod default `_open_j2534`, `# pragma: no cover` — real dylib is
+  [NEEDS ON-CAR CHECK]), with the same LIVE/`NEEDS ON-CAR CHECK` banner + open-failure
+  device-release (`transport.close()`) as the serial backends; `main()` threads `pt_factory`.
+  **Test-first, positive path fired:** a full-stack `--backend j2534` Mode-01 PID-0C read decodes
+  **1000 rpm** end-to-end over an injected scripted pt (hand-derived from SAE J1979:
+  `41 0C 0F A0` → ((0x0F*256)+0xA0)/4 = 1000.0); plus construct-open-banner, open-failure
+  device-release, and a `main()`/argv reachability scan (LIVE + "not present", exit 0). The
+  every-`--backend`-choice drift-guard now supplies the fake pt so it covers j2534 too. Verified
+  by RUNNING: 4 new positives fired in `-v`; canonical suite 622 → **`Ran 626 tests in 2.251s … OK`**.
+  Still TODO on 0.2 (unchanged): loading the REAL vendor `.dylib` + calling on live hardware —
+  [NEEDS ON-CAR CHECK]. No forbidden category (same raw-CAN diagnostic tier as slcan/elm327).
