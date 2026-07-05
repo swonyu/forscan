@@ -195,6 +195,105 @@ def unpack_msg(c: CPassThruMsg) -> PassThruMsg:
     )
 
 
+# --- The J2534-1 PassThru* C entry-point prototypes (the callable face of the .dylib)
+# SAE J2534-1 v04.04 defines a fixed set of C entry points, every one returning the
+# `long` status code and taking device/channel handles + PASSTHRU_MSG pointers:
+#
+#     long PassThruOpen(void *pName, unsigned long *pDeviceID);
+#     long PassThruConnect(unsigned long DeviceID, unsigned long ProtocolID,
+#                          unsigned long Flags, unsigned long BaudRate,
+#                          unsigned long *pChannelID);
+#     long PassThruReadMsgs(unsigned long ChannelID, PASSTHRU_MSG *pMsg,
+#                           unsigned long *pNumMsgs, unsigned long Timeout);
+#     ... (14 entry points total)
+#
+# ctypes needs each function's restype/argtypes to marshal Python args to the C ABI.
+# As with CPassThruMsg above, J2534's `unsigned long` is the 32-bit Windows-origin
+# type -> c_uint32 (NOT c_ulong, which is 64-bit under LP64 on macOS/Linux and would
+# mis-marshal every handle); the status `long` -> c_int32; PASSTHRU_MSG* ->
+# POINTER(CPassThruMsg). Hand-derived from SAE J2534-1. LOADING a real vendor .dylib
+# and CALLING these entry points needs the adapter + vendor driver and is
+# **[NEEDS ON-CAR CHECK]** — only bind_prototypes over an injected library (and
+# load_library's missing-library error path) is proven here with no hardware.
+_J2534_LONG = ctypes.c_int32                        # J2534 status return (`long`)
+_J2534_ULONG = ctypes.c_uint32                      # J2534 `unsigned long` (32-bit)
+_J2534_ULONG_P = ctypes.POINTER(ctypes.c_uint32)    # `unsigned long *` (out param)
+_J2534_MSG_P = ctypes.POINTER(CPassThruMsg)         # `PASSTHRU_MSG *`
+_J2534_VOID_P = ctypes.c_void_p                     # `void *`
+_J2534_CHAR_P = ctypes.c_char_p                     # `char *`
+
+PASSTHRU_PROTOTYPES = {
+    "PassThruOpen": (_J2534_LONG, (_J2534_VOID_P, _J2534_ULONG_P)),
+    "PassThruClose": (_J2534_LONG, (_J2534_ULONG,)),
+    "PassThruConnect": (
+        _J2534_LONG,
+        (_J2534_ULONG, _J2534_ULONG, _J2534_ULONG, _J2534_ULONG, _J2534_ULONG_P),
+    ),
+    "PassThruDisconnect": (_J2534_LONG, (_J2534_ULONG,)),
+    "PassThruReadMsgs": (
+        _J2534_LONG,
+        (_J2534_ULONG, _J2534_MSG_P, _J2534_ULONG_P, _J2534_ULONG),
+    ),
+    "PassThruWriteMsgs": (
+        _J2534_LONG,
+        (_J2534_ULONG, _J2534_MSG_P, _J2534_ULONG_P, _J2534_ULONG),
+    ),
+    "PassThruStartPeriodicMsg": (
+        _J2534_LONG,
+        (_J2534_ULONG, _J2534_MSG_P, _J2534_ULONG_P, _J2534_ULONG),
+    ),
+    "PassThruStopPeriodicMsg": (_J2534_LONG, (_J2534_ULONG, _J2534_ULONG)),
+    "PassThruStartMsgFilter": (
+        _J2534_LONG,
+        (_J2534_ULONG, _J2534_ULONG, _J2534_MSG_P, _J2534_MSG_P, _J2534_MSG_P,
+         _J2534_ULONG_P),
+    ),
+    "PassThruStopMsgFilter": (_J2534_LONG, (_J2534_ULONG, _J2534_ULONG)),
+    "PassThruSetProgrammingVoltage": (
+        _J2534_LONG,
+        (_J2534_ULONG, _J2534_ULONG, _J2534_ULONG),
+    ),
+    "PassThruReadVersion": (
+        _J2534_LONG,
+        (_J2534_ULONG, _J2534_CHAR_P, _J2534_CHAR_P, _J2534_CHAR_P),
+    ),
+    "PassThruGetLastError": (_J2534_LONG, (_J2534_CHAR_P,)),
+    "PassThruIoctl": (
+        _J2534_LONG,
+        (_J2534_ULONG, _J2534_ULONG, _J2534_VOID_P, _J2534_VOID_P),
+    ),
+}
+
+
+def bind_prototypes(lib):
+    """Apply the SAE J2534-1 ctypes prototypes to a loaded PassThru library.
+
+    ``lib`` is a ``ctypes.CDLL`` (or any object exposing the ``PassThru*`` entry
+    points as attributes with settable ``restype``/``argtypes`` — e.g. an injected
+    fake). Sets each function's ``restype``/``argtypes`` from ``PASSTHRU_PROTOTYPES``
+    so ctypes marshals Python args to the C ABI, and returns ``lib`` so callers can
+    chain. Purely declarative — no entry point is CALLED here, so it runs with no
+    hardware. Actually LOADING a vendor ``.dylib`` and INVOKING these functions is
+    **[NEEDS ON-CAR CHECK]**.
+    """
+    for name, (restype, argtypes) in PASSTHRU_PROTOTYPES.items():
+        func = getattr(lib, name)
+        func.restype = restype
+        func.argtypes = list(argtypes)
+    return lib
+
+
+def load_library(path: str):
+    """Load a J2534 vendor library from ``path`` and bind the ``PassThru*`` prototypes.
+
+    Thin wrapper over ``bind_prototypes(ctypes.CDLL(path))``. Loading a REAL Openport/
+    Ford ``.dylib`` and calling into it needs the adapter + vendor driver and is
+    **[NEEDS ON-CAR CHECK]**; the suite exercises only ``bind_prototypes`` over an
+    injected fake plus this function's missing-library error path (``OSError``).
+    """
+    return bind_prototypes(ctypes.CDLL(path))
+
+
 # Fixed PassThruWriteMsgs timeout (ms): transmit is near-instant on a live bus, so
 # this only bounds a stuck adapter. Receive timeouts come from recv()'s argument.
 _WRITE_TIMEOUT_MS = 100

@@ -24,8 +24,16 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
       (iter 141, `transport/j2534.py`): `CPassThruMsg` (`ctypes.Structure`, 6×`c_uint32` + `Data[4128]`,
       spec `sizeof`=4152) + `pack_msg`/`unpack_msg` marshalling to the dataclass — layout hand-derived
       from SAE J2534-1 (offsets 0/4/8/12/16/20, Data@24), the size test straddles the `c_ulong`=8-byte
-      LP64 trap (4176). Still TODO: LOADING + CALLING the vendor `.dylib` over ctypes (`cdll`, the
-      `PassThru*` function prototypes), which is [NEEDS ON-CAR CHECK].
+      LP64 trap (4176). The `PassThru*` function PROTOTYPES landed too (iter 142,
+      `transport/j2534.py`): `PASSTHRU_PROTOTYPES` (the 14 SAE J2534-1 v04.04 C entry-point
+      signatures) + `bind_prototypes(lib)` applying `restype`/`argtypes` to a loaded library
+      + a `load_library(path)` wrapper — `unsigned long`→`c_uint32` (32-bit), status `long`→
+      `c_int32`, `PASSTHRU_MSG*`→`POINTER(CPassThruMsg)`, all hand-derived from SAE J2534-1 and
+      proven over an INJECTED fake lib (+ the missing-`.dylib` `OSError` path), with the
+      ReadMsgs/StartMsgFilter struct-pointer + 32-bit-handle straddles pinned. Still TODO:
+      LOADING the REAL vendor `.dylib` over `cdll` + CALLING these entry points on live
+      hardware, and the thin adapter wrapping the bound lib into the `J2534Transport` `pt`
+      duck-type — all [NEEDS ON-CAR CHECK].
 - [x] 1.1a ISO-TP frame codec: SF/FF/CF/FC encode + parse (pure, hand-derived fixtures)
 - [x] 1.1b ISO-TP transport layer: `IsoTpSocket` send/recv + flow control; `SimulatedIsoTpEcu`
       (reusable simulated endpoint). BS=0 both ways; client send honours ECU block-size>0.

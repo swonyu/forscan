@@ -19,6 +19,9 @@ from fordscope.transport import (
     pack_msg,
     unpack_msg,
     PASSTHRU_MSG_DATA_LEN,
+    PASSTHRU_PROTOTYPES,
+    bind_prototypes,
+    load_library,
     encode_can_message,
     parse_can_message,
     can_baudrate,
@@ -512,6 +515,141 @@ class PassThruMsgCAbiTests(unittest.TestCase):
         self.assertEqual(ok.DataSize, PASSTHRU_MSG_DATA_LEN)
         with self.assertRaises(ValueError):
             pack_msg(PassThruMsg(PROTOCOL_CAN, bytes(PASSTHRU_MSG_DATA_LEN + 1)))
+
+
+class _FakePassThruLib:
+    """Injected stand-in for a loaded ``ctypes.CDLL``: one settable-``restype``/
+    ``argtypes`` slot per ``PassThru*`` entry point, mirroring the ``_FuncPtr`` objects
+    ctypes exposes. Lets ``bind_prototypes`` be exercised with NO real vendor ``.dylib``
+    -- exactly as ``J2534Transport`` is driven by an injected PassThru object. A bogus
+    name in the prototype table would raise ``AttributeError`` here, so the fake also
+    pins the entry-point NAME set from the test side.
+    """
+
+    class _Func:
+        __slots__ = ("restype", "argtypes")
+
+        def __init__(self):
+            self.restype = None
+            self.argtypes = None
+
+    def __init__(self, names):
+        for n in names:
+            setattr(self, n, self._Func())
+
+
+class J2534PrototypeBindingTests(unittest.TestCase):
+    """The ctypes PROTOTYPES for the J2534-1 ``PassThru*`` C entry points -- the
+    ``restype``/``argtypes`` ctypes uses to marshal Python args to the vendor
+    ``.dylib``'s C ABI. Every expected signature is hand-derived from the SAE
+    J2534-1 v04.04 API (the same standard the ``CPassThruMsg`` struct comes from):
+
+        long PassThruOpen(void *pName, unsigned long *pDeviceID);
+        long PassThruConnect(unsigned long DeviceID, unsigned long ProtocolID,
+                             unsigned long Flags, unsigned long BaudRate,
+                             unsigned long *pChannelID);
+        long PassThruReadMsgs(unsigned long ChannelID, PASSTHRU_MSG *pMsg,
+                              unsigned long *pNumMsgs, unsigned long Timeout);
+        ... (14 entry points total)
+
+    J2534's ``unsigned long`` is the 32-bit Windows-origin type -> ``c_uint32``
+    (matching the struct's fields, NOT LP64 ``c_ulong`` which is 8 bytes on macOS/
+    Linux); the status return ``long`` -> ``c_int32``; ``PASSTHRU_MSG *`` ->
+    ``POINTER(CPassThruMsg)``. LOADING a real vendor ``.dylib`` and CALLING these
+    entry points needs the hardware + driver and stays **[NEEDS ON-CAR CHECK]**;
+    only the prototype BINDING over an injected fake (and the missing-library error
+    path) is proven here, with no hardware attached.
+    """
+
+    def _expected(self):
+        # Independent hand-derivation from SAE J2534-1 v04.04 -- NOT read from the
+        # module's PASSTHRU_PROTOTYPES. U=unsigned long(32b), L=long return(32b),
+        # UP=unsigned long*, M=PASSTHRU_MSG*, VP=void*, CP=char*.
+        U = ctypes.c_uint32
+        L = ctypes.c_int32
+        UP = ctypes.POINTER(ctypes.c_uint32)
+        M = ctypes.POINTER(CPassThruMsg)
+        VP = ctypes.c_void_p
+        CP = ctypes.c_char_p
+        return {
+            "PassThruOpen": (L, [VP, UP]),
+            "PassThruClose": (L, [U]),
+            "PassThruConnect": (L, [U, U, U, U, UP]),
+            "PassThruDisconnect": (L, [U]),
+            "PassThruReadMsgs": (L, [U, M, UP, U]),
+            "PassThruWriteMsgs": (L, [U, M, UP, U]),
+            "PassThruStartPeriodicMsg": (L, [U, M, UP, U]),
+            "PassThruStopPeriodicMsg": (L, [U, U]),
+            "PassThruStartMsgFilter": (L, [U, U, M, M, M, UP]),
+            "PassThruStopMsgFilter": (L, [U, U]),
+            "PassThruSetProgrammingVoltage": (L, [U, U, U]),
+            "PassThruReadVersion": (L, [U, CP, CP, CP]),
+            "PassThruGetLastError": (L, [CP]),
+            "PassThruIoctl": (L, [U, U, VP, VP]),
+        }
+
+    def test_prototype_table_covers_exactly_the_j2534_v0404_api(self):
+        # No missing entry point, no invented extra one -- the exact v04.04 set.
+        self.assertEqual(set(PASSTHRU_PROTOTYPES), set(self._expected()))
+
+    def test_bind_prototypes_applies_spec_signatures_to_each_entry_point(self):
+        exp = self._expected()
+        lib = _FakePassThruLib(exp.keys())
+        bind_prototypes(lib)
+        for name, (restype, argtypes) in exp.items():
+            func = getattr(lib, name)
+            self.assertEqual(func.restype, restype, name)
+            self.assertEqual(list(func.argtypes), argtypes, name)
+
+    def test_bind_prototypes_returns_the_same_lib_for_chaining(self):
+        lib = _FakePassThruLib(self._expected().keys())
+        self.assertIs(bind_prototypes(lib), lib)
+
+    def test_readmsgs_takes_the_struct_pointer_and_an_out_count(self):
+        # STRADDLE: the message arg must be POINTER(CPassThruMsg) (NOT a bare c_void_p),
+        # and the count is an OUT pointer (POINTER(c_uint32)) not a by-value count --
+        # else the driver cannot report how many messages it actually read.
+        _restype, argtypes = PASSTHRU_PROTOTYPES["PassThruReadMsgs"]
+        self.assertEqual(
+            list(argtypes),
+            [ctypes.c_uint32, ctypes.POINTER(CPassThruMsg),
+             ctypes.POINTER(ctypes.c_uint32), ctypes.c_uint32],
+        )
+
+    def test_startmsgfilter_takes_three_message_pointers(self):
+        # STRADDLE: the 6-arg filter is mask, pattern, flow-control (three
+        # PASSTHRU_MSG*) + an out filter-id -- dropping one or mistyping the struct
+        # pointer would break the pass-all filter the raw-CAN channel needs.
+        _restype, argtypes = PASSTHRU_PROTOTYPES["PassThruStartMsgFilter"]
+        argtypes = list(argtypes)
+        self.assertEqual(len(argtypes), 6)
+        self.assertEqual(argtypes[2:5], [ctypes.POINTER(CPassThruMsg)] * 3)
+        self.assertEqual(argtypes[5], ctypes.POINTER(ctypes.c_uint32))
+
+    def test_scalar_handle_args_are_32bit_not_lp64(self):
+        # STRADDLE: J2534 `unsigned long` is 32-bit; c_ulong is 8 bytes under LP64 on
+        # macOS/Linux and would mis-marshal every handle. Pin Connect's four handle
+        # args to a 4-byte scalar and its out-channel to a 32-bit pointer.
+        _restype, argtypes = PASSTHRU_PROTOTYPES["PassThruConnect"]
+        argtypes = list(argtypes)
+        self.assertEqual(len(argtypes), 5)
+        for a in argtypes[:4]:
+            self.assertIs(a, ctypes.c_uint32)
+            self.assertEqual(ctypes.sizeof(a), 4)
+        self.assertEqual(argtypes[4], ctypes.POINTER(ctypes.c_uint32))
+
+    def test_all_entry_points_return_the_j2534_status_long(self):
+        # Every PassThru* function returns the `long` status code -> c_int32 (4 bytes),
+        # never the ctypes default int on some other-width platform.
+        for name, (restype, _argtypes) in PASSTHRU_PROTOTYPES.items():
+            self.assertEqual(restype, ctypes.c_int32, name)
+            self.assertEqual(ctypes.sizeof(restype), 4, name)
+
+    def test_load_library_raises_for_missing_dylib(self):
+        # Real vendor-.dylib LOAD + CALL is [NEEDS ON-CAR CHECK]; the ERROR path (a
+        # missing library) is simulator-testable and must surface, not be swallowed.
+        with self.assertRaises(OSError):
+            load_library("/nonexistent/fordscope-no-such-j2534.dylib")
 
 
 if __name__ == "__main__":
