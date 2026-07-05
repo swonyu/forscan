@@ -30,6 +30,8 @@ from .elm327 import (
 )
 from .j2534 import (
     J2534Transport,
+    PassThruAdapter,
+    J2534Error,
     PassThruMsg,
     CPassThruMsg,
     pack_msg,
@@ -45,6 +47,8 @@ from .j2534 import (
     CAN_29BIT_ID,
     TX_MSG_TYPE,
     PASS_FILTER,
+    STATUS_NOERROR,
+    ERR_BUFFER_EMPTY,
 )
 
 __all__ = [
@@ -69,6 +73,8 @@ __all__ = [
     "parse_response_line",
     "protocol_command",
     "J2534Transport",
+    "PassThruAdapter",
+    "J2534Error",
     "PassThruMsg",
     "CPassThruMsg",
     "pack_msg",
@@ -84,4 +90,6 @@ __all__ = [
     "CAN_29BIT_ID",
     "TX_MSG_TYPE",
     "PASS_FILTER",
+    "STATUS_NOERROR",
+    "ERR_BUFFER_EMPTY",
 ]

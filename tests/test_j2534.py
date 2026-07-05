@@ -29,6 +29,10 @@ from fordscope.transport import (
     CAN_29BIT_ID,
     TX_MSG_TYPE,
     PASS_FILTER,
+    PassThruAdapter,
+    J2534Error,
+    STATUS_NOERROR,
+    ERR_BUFFER_EMPTY,
 )
 from fordscope.isotp import IsoTpSocket
 from fordscope.obd import ObdClient, ObdError
@@ -650,6 +654,201 @@ class J2534PrototypeBindingTests(unittest.TestCase):
         # missing library) is simulator-testable and must surface, not be swallowed.
         with self.assertRaises(OSError):
             load_library("/nonexistent/fordscope-no-such-j2534.dylib")
+
+
+class _FakeBoundLib:
+    """Callable stand-in for a *bound* ctypes ``CDLL``: each ``PassThru*`` entry point
+    is a Python callable receiving the SAME marshalled args ``PassThruAdapter`` hands
+    the C ABI (out-params as ``ctypes.pointer`` objects, messages as a ``CPassThruMsg``
+    array), simulating the C side by filling out-params and returning a status ``int``.
+    Records every call so the marshalling can be asserted. No vendor ``.dylib``, no bus
+    — this is the injected face the adapter is proven against, exactly as
+    ``_FakePassThruLib`` stands in for the CDLL that ``bind_prototypes`` decorates."""
+
+    def __init__(self):
+        self.calls = []
+        self.device_id = 0xD1
+        self.channel_id = 0xC1
+        self.filter_id = 0x2A
+        self.written = []          # PassThruMsg recovered from PassThruWriteMsgs
+        self._read_batches = []    # queued list[PassThruMsg] for PassThruReadMsgs
+        self.force_status = {}     # entry-point name -> status to return instead of 0
+
+    def _status(self, name):
+        return self.force_status.get(name, STATUS_NOERROR)
+
+    def feed(self, msgs):
+        """Queue one PassThruReadMsgs batch (a list of PassThruMsg)."""
+        self._read_batches.append(list(msgs))
+
+    def PassThruOpen(self, p_name, p_device_id):
+        self.calls.append(("PassThruOpen", p_name))
+        p_device_id.contents.value = self.device_id
+        return self._status("PassThruOpen")
+
+    def PassThruConnect(self, device_id, protocol_id, flags, baudrate, p_channel_id):
+        self.calls.append(("PassThruConnect", device_id, protocol_id, flags, baudrate))
+        p_channel_id.contents.value = self.channel_id
+        return self._status("PassThruConnect")
+
+    def PassThruStartMsgFilter(self, channel_id, filter_type, p_mask, p_pattern,
+                               p_flow, p_filter_id):
+        self.calls.append((
+            "PassThruStartMsgFilter", channel_id, filter_type,
+            unpack_msg(p_mask.contents), unpack_msg(p_pattern.contents), p_flow,
+        ))
+        p_filter_id.contents.value = self.filter_id
+        return self._status("PassThruStartMsgFilter")
+
+    def PassThruWriteMsgs(self, channel_id, arr, p_num, timeout):
+        n = p_num.contents.value
+        self.written.extend(unpack_msg(arr[i]) for i in range(n))
+        self.calls.append(("PassThruWriteMsgs", channel_id, n, timeout))
+        return self._status("PassThruWriteMsgs")
+
+    def PassThruReadMsgs(self, channel_id, arr, p_num, timeout):
+        forced = self.force_status.get("PassThruReadMsgs")
+        if forced is not None:
+            p_num.contents.value = 0
+            return forced
+        if not self._read_batches:
+            p_num.contents.value = 0
+            return ERR_BUFFER_EMPTY  # spec's "nothing arrived within Timeout"
+        batch = self._read_batches.pop(0)
+        cap = p_num.contents.value                 # adapter's buffer capacity
+        k = min(len(batch), cap)
+        for i in range(k):
+            arr[i] = pack_msg(batch[i])
+        p_num.contents.value = k                   # actual count read back out
+        self.calls.append(("PassThruReadMsgs", channel_id, timeout, k))
+        return STATUS_NOERROR
+
+    def PassThruDisconnect(self, channel_id):
+        self.calls.append(("PassThruDisconnect", channel_id))
+        return self._status("PassThruDisconnect")
+
+    def PassThruClose(self, device_id):
+        self.calls.append(("PassThruClose", device_id))
+        return self._status("PassThruClose")
+
+
+class PassThruAdapterTests(unittest.TestCase):
+    """``PassThruAdapter`` turns a bound ctypes CDLL (the callable ``.dylib`` face)
+    into the high-level ``pt`` duck-type ``J2534Transport`` drives. Proven over
+    ``_FakeBoundLib`` with no hardware; the status codes asserted are hand-derived
+    from the SAE J2534-1 return-value table, not read from the adapter."""
+
+    def test_status_codes_are_spec_values(self):
+        # SAE J2534-1 return-value table: success == 0x00; ReadMsgs' empty-buffer
+        # signal == 0x10. These drive the adapter's raise-vs-empty-list decision.
+        self.assertEqual(STATUS_NOERROR, 0x00)
+        self.assertEqual(ERR_BUFFER_EMPTY, 0x10)
+
+    def test_open_returns_device_id_and_passes_null_name(self):
+        lib = _FakeBoundLib()
+        self.assertEqual(PassThruAdapter(lib).open(), 0xD1)
+        self.assertEqual(lib.calls[0], ("PassThruOpen", None))
+
+    def test_connect_marshals_scalars_and_returns_channel_id(self):
+        lib = _FakeBoundLib()
+        chan = PassThruAdapter(lib).connect(0xD1, PROTOCOL_CAN, 0, 500000)
+        self.assertEqual(chan, 0xC1)
+        self.assertEqual(
+            lib.calls[-1], ("PassThruConnect", 0xD1, PROTOCOL_CAN, 0, 500000)
+        )
+
+    def test_start_msg_filter_sends_mask_pattern_null_flow_returns_id(self):
+        lib = _FakeBoundLib()
+        zero = b"\x00\x00\x00\x00"
+        fid = PassThruAdapter(lib).start_msg_filter(
+            0xC1, PASS_FILTER,
+            PassThruMsg(PROTOCOL_CAN, zero), PassThruMsg(PROTOCOL_CAN, zero),
+        )
+        self.assertEqual(fid, 0x2A)
+        name, chan, ftype, mask, pattern, flow = lib.calls[-1]
+        self.assertEqual((name, chan, ftype),
+                         ("PassThruStartMsgFilter", 0xC1, PASS_FILTER))
+        self.assertEqual(mask.data, zero)
+        self.assertEqual(pattern.data, zero)
+        self.assertIsNone(flow)  # a PASS filter has a NULL flow-control message ptr
+
+    def test_write_msgs_packs_every_frame_and_passes_timeout(self):
+        lib = _FakeBoundLib()
+        m1 = PassThruMsg(PROTOCOL_CAN, bytes.fromhex("000007E0AABB"))
+        m2 = PassThruMsg(PROTOCOL_CAN, bytes.fromhex("000007E00201"),
+                         tx_flags=CAN_29BIT_ID)
+        PassThruAdapter(lib).write_msgs(0xC1, [m1, m2], 100)
+        self.assertEqual(len(lib.written), 2)
+        self.assertEqual(lib.written[0].data.hex(), "000007e0aabb")
+        self.assertEqual(lib.written[1].data.hex(), "000007e00201")
+        self.assertEqual(lib.written[1].tx_flags, CAN_29BIT_ID)
+        self.assertEqual(lib.calls[-1], ("PassThruWriteMsgs", 0xC1, 2, 100))
+
+    def test_read_msgs_unpacks_returned_batch_with_status(self):
+        lib = _FakeBoundLib()
+        lib.feed([
+            PassThruMsg(PROTOCOL_CAN, bytes.fromhex("000007E80341")),
+            PassThruMsg(PROTOCOL_CAN, bytes.fromhex("18DAF11022"),
+                        rx_status=CAN_29BIT_ID),
+        ])
+        got = PassThruAdapter(lib).read_msgs(0xC1, 1000)
+        self.assertEqual(len(got), 2)
+        self.assertEqual(got[0].data.hex(), "000007e80341")
+        self.assertEqual(got[1].data.hex(), "18daf11022")
+        self.assertEqual(got[1].rx_status, CAN_29BIT_ID)
+
+    def test_read_msgs_empty_buffer_is_empty_list_not_error(self):
+        lib = _FakeBoundLib()  # nothing fed => fake returns ERR_BUFFER_EMPTY
+        self.assertEqual(PassThruAdapter(lib).read_msgs(0xC1, 5), [])
+
+    def test_nonzero_status_raises_j2534error_with_function_and_code(self):
+        lib = _FakeBoundLib()
+        lib.force_status["PassThruOpen"] = 0x07  # ERR_FAILED per SAE J2534-1
+        with self.assertRaises(J2534Error) as ctx:
+            PassThruAdapter(lib).open()
+        self.assertEqual(ctx.exception.function, "PassThruOpen")
+        self.assertEqual(ctx.exception.status, 0x07)
+
+    def test_read_msgs_hard_error_still_raises_not_swallowed(self):
+        # A read failure that is NOT buffer-empty must surface, not become [].
+        lib = _FakeBoundLib()
+        lib.force_status["PassThruReadMsgs"] = 0x02  # ERR_INVALID_CHANNEL_ID
+        with self.assertRaises(J2534Error):
+            PassThruAdapter(lib).read_msgs(0xC1, 5)
+
+    def test_disconnect_and_close_hit_their_entry_points(self):
+        lib = _FakeBoundLib()
+        adapter = PassThruAdapter(lib)
+        adapter.disconnect(0xC1)
+        adapter.close(0xD1)
+        self.assertIn(("PassThruDisconnect", 0xC1), lib.calls)
+        self.assertIn(("PassThruClose", 0xD1), lib.calls)
+
+    def test_adapter_drives_j2534transport_open_send_recv_end_to_end(self):
+        # The payoff: the adapter satisfies J2534Transport's `pt` contract, so the
+        # full transport lifecycle round-trips a CAN frame through the bound-.dylib
+        # face with NO hardware — exactly as iter 140 proved over a scripted duck-type.
+        lib = _FakeBoundLib()
+        t = J2534Transport(PassThruAdapter(lib), baudrate_kbps=500)
+        t.open()
+        self.assertEqual(lib.calls[0], ("PassThruOpen", None))
+        self.assertEqual(lib.calls[1],
+                         ("PassThruConnect", 0xD1, PROTOCOL_CAN, 0, 500000))
+        self.assertEqual(lib.calls[2][:3],
+                         ("PassThruStartMsgFilter", 0xC1, PASS_FILTER))
+        # send marshals a standard frame through PassThruWriteMsgs (4-byte BE id)
+        t.send(CanFrame(0x7E0, bytes.fromhex("02010C")))
+        self.assertEqual(len(lib.written), 1)
+        self.assertEqual(lib.written[0].data.hex(), "000007e002010c")
+        # a frame waiting on the bus comes back through PassThruReadMsgs
+        lib.feed([PassThruMsg(PROTOCOL_CAN, bytes.fromhex("000007E8030C1234"))])
+        frame = t.recv(timeout=1.0)
+        self.assertIsInstance(frame, CanFrame)
+        self.assertEqual(frame.arbitration_id, 0x7E8)
+        self.assertEqual(frame.data.hex(), "030c1234")
+        t.close()
+        self.assertIn(("PassThruDisconnect", 0xC1), lib.calls)
+        self.assertIn(("PassThruClose", 0xD1), lib.calls)
 
 
 if __name__ == "__main__":

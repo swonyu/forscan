@@ -30,10 +30,19 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
       + a `load_library(path)` wrapper — `unsigned long`→`c_uint32` (32-bit), status `long`→
       `c_int32`, `PASSTHRU_MSG*`→`POINTER(CPassThruMsg)`, all hand-derived from SAE J2534-1 and
       proven over an INJECTED fake lib (+ the missing-`.dylib` `OSError` path), with the
-      ReadMsgs/StartMsgFilter struct-pointer + 32-bit-handle straddles pinned. Still TODO:
+      ReadMsgs/StartMsgFilter struct-pointer + 32-bit-handle straddles pinned. The thin
+      ADAPTER landed too (iter 143, `transport/j2534.py`): `PassThruAdapter` wraps a bound
+      lib (the callable `PassThru*` entry points) and presents `J2534Transport`'s `pt`
+      duck-type — open/connect/start_msg_filter/write_msgs/read_msgs/disconnect/close —
+      out-handles via `ctypes.pointer(c_uint32)`, messages via `pack_msg`/`unpack_msg`
+      `CPassThruMsg` arrays, non-zero status -> `J2534Error` EXCEPT ReadMsgs'
+      `ERR_BUFFER_EMPTY` (0x10) -> [] (the spec's timeout signal); `STATUS_NOERROR`/
+      `ERR_BUFFER_EMPTY` hand-derived from the SAE J2534-1 return-value table. Proven over
+      an INJECTED `_FakeBoundLib` (callable C entry points, no hardware): per-method
+      marshalling, the buffer-empty-vs-hard-error straddle, AND a full
+      `J2534Transport(PassThruAdapter(fake))` open->send->recv CAN round-trip. Still TODO:
       LOADING the REAL vendor `.dylib` over `cdll` + CALLING these entry points on live
-      hardware, and the thin adapter wrapping the bound lib into the `J2534Transport` `pt`
-      duck-type — all [NEEDS ON-CAR CHECK].
+      hardware — [NEEDS ON-CAR CHECK].
 - [x] 1.1a ISO-TP frame codec: SF/FF/CF/FC encode + parse (pure, hand-derived fixtures)
 - [x] 1.1b ISO-TP transport layer: `IsoTpSocket` send/recv + flow control; `SimulatedIsoTpEcu`
       (reusable simulated endpoint). BS=0 both ways; client send honours ECU block-size>0.

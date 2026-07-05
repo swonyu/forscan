@@ -27,6 +27,7 @@ from typing import Optional
 from .base import (
     CanFrame,
     Transport,
+    TransportError,
     TransportNotOpen,
     CAN_MAX_CLASSIC_DLC,
     CAN_MAX_11BIT_ID,
@@ -292,6 +293,117 @@ def load_library(path: str):
     injected fake plus this function's missing-library error path (``OSError``).
     """
     return bind_prototypes(ctypes.CDLL(path))
+
+
+# --- SAE J2534-1 return codes (spec values, hand-derived from the standard's
+# return-value table, NOT read back from any adapter) --------------------------
+# Every PassThru* entry point returns a `long` status; 0 == success. ReadMsgs uses
+# ERR_BUFFER_EMPTY (0x10) as the ordinary "no message arrived within Timeout"
+# signal, so the adapter maps THAT one status to an empty batch, not an error.
+STATUS_NOERROR = 0x00
+ERR_BUFFER_EMPTY = 0x10
+
+
+class J2534Error(TransportError):
+    """A ``PassThru*`` entry point returned a non-zero J2534 status code.
+
+    Carries the failing ``function`` name and the raw ``status`` so callers can map
+    it (e.g. via ``PassThruGetLastError``). ReadMsgs' ``ERR_BUFFER_EMPTY`` is NOT
+    raised — the adapter treats it as an empty receive per the spec.
+    """
+
+    def __init__(self, function: str, status: int) -> None:
+        self.function = function
+        self.status = status
+        super().__init__(f"{function} returned J2534 status 0x{status:02X}")
+
+
+class PassThruAdapter:
+    """Wrap a bound J2534 library and present the ``J2534Transport`` ``pt`` duck-type.
+
+    ``lib`` is a ``ctypes.CDLL`` with the ``PassThru*`` prototypes applied by
+    :func:`bind_prototypes` (or any object exposing those entry points as callables,
+    e.g. an injected fake). Each method marshals Python <-> the J2534 C ABI:
+
+    * out handles (device / channel / filter id, message count) travel as
+      ``ctypes.pointer(c_uint32())`` and are read back from ``.value``;
+    * ``PASSTHRU_MSG`` records cross as ``CPassThruMsg`` arrays via
+      :func:`pack_msg` / :func:`unpack_msg`;
+    * a non-zero status raises :class:`J2534Error`, EXCEPT ReadMsgs'
+      ``ERR_BUFFER_EMPTY`` which maps to an empty list (the spec's timeout signal).
+
+    This is the thin seam between the callable ``.dylib`` face (proven here over an
+    injected fake, no hardware) and the transport, i.e. the ``pt`` object
+    :class:`J2534Transport` drives. LOADING a real vendor ``.dylib`` and CALLING
+    these entry points on a live bus is **[NEEDS ON-CAR CHECK]**.
+    """
+
+    def __init__(self, lib, *, read_batch: int = 8) -> None:
+        self._lib = lib
+        self._read_batch = read_batch
+
+    @staticmethod
+    def _check(function: str, status: int) -> None:
+        if status != STATUS_NOERROR:
+            raise J2534Error(function, status)
+
+    def open(self):
+        device_id = ctypes.c_uint32()
+        self._check("PassThruOpen", self._lib.PassThruOpen(None, ctypes.pointer(device_id)))
+        return device_id.value
+
+    def connect(self, device_id, protocol_id, flags, baudrate):
+        channel_id = ctypes.c_uint32()
+        self._check(
+            "PassThruConnect",
+            self._lib.PassThruConnect(
+                device_id, protocol_id, flags, baudrate, ctypes.pointer(channel_id)
+            ),
+        )
+        return channel_id.value
+
+    def start_msg_filter(self, channel_id, filter_type, mask, pattern):
+        filter_id = ctypes.c_uint32()
+        c_mask = pack_msg(mask)
+        c_pattern = pack_msg(pattern)
+        self._check(
+            "PassThruStartMsgFilter",
+            self._lib.PassThruStartMsgFilter(
+                channel_id,
+                filter_type,
+                ctypes.pointer(c_mask),
+                ctypes.pointer(c_pattern),
+                None,  # pFlowControlMsg: NULL for a PASS/BLOCK filter (raw CAN)
+                ctypes.pointer(filter_id),
+            ),
+        )
+        return filter_id.value
+
+    def write_msgs(self, channel_id, msgs, timeout):
+        count = len(msgs)
+        arr = (CPassThruMsg * count)(*[pack_msg(m) for m in msgs])
+        num = ctypes.c_uint32(count)
+        self._check(
+            "PassThruWriteMsgs",
+            self._lib.PassThruWriteMsgs(channel_id, arr, ctypes.pointer(num), timeout),
+        )
+
+    def read_msgs(self, channel_id, timeout):
+        arr = (CPassThruMsg * self._read_batch)()
+        num = ctypes.c_uint32(self._read_batch)
+        status = self._lib.PassThruReadMsgs(
+            channel_id, arr, ctypes.pointer(num), timeout
+        )
+        if status == ERR_BUFFER_EMPTY:
+            return []  # spec's ordinary "nothing within Timeout" — not a failure
+        self._check("PassThruReadMsgs", status)
+        return [unpack_msg(arr[i]) for i in range(num.value)]
+
+    def disconnect(self, channel_id):
+        self._check("PassThruDisconnect", self._lib.PassThruDisconnect(channel_id))
+
+    def close(self, device_id):
+        self._check("PassThruClose", self._lib.PassThruClose(device_id))
 
 
 # Fixed PassThruWriteMsgs timeout (ms): transmit is near-instant on a live bus, so
