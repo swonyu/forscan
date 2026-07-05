@@ -55,6 +55,24 @@ class PidDecodeTests(unittest.TestCase):
     def test_timing_advance(self):
         self.assertEqual(decode_pid(0x0E, bytes([128])).value, 0.0)  # 128/2 - 64
 
+    def test_fuel_trim_negative_range(self):
+        # SAE J1979 fuel trim: (A-128)*100/128 %, SIGNED, range -100%..+99.21875%.
+        # The existing test covers only zero+positive (128/192); pin the NEGATIVE
+        # half + both spec extremes so a sign-dropping decoder (e.g. abs(A-128))
+        # can no longer pass. Values hand-derived from the formula, not the code.
+        self.assertEqual(decode_pid(0x06, bytes([0])).value, -100.0)      # spec minimum (A=0)
+        self.assertEqual(decode_pid(0x06, bytes([64])).value, -50.0)      # straddles zero from below
+        self.assertEqual(decode_pid(0x06, bytes([255])).value, 99.21875)  # spec maximum (the /128 fraction)
+        # PID 0x2D "EGR error" shares the same signed formula:
+        self.assertEqual(decode_pid(0x2D, bytes([0])).value, -100.0)
+
+    def test_timing_advance_signed_endpoints(self):
+        # SAE J1979 timing advance: A/2 - 64 deg, range -64 (full retard) .. +63.5.
+        # The existing test pins only the zero point (A=128); pin both SIGNED
+        # endpoints so dropping the -64 offset or the sign is caught.
+        self.assertEqual(decode_pid(0x0E, bytes([0])).value, -64.0)   # spec minimum (full retard)
+        self.assertEqual(decode_pid(0x0E, bytes([255])).value, 63.5)  # spec maximum
+
     def test_unknown_pid_raises(self):
         with self.assertRaises(KeyError):
             decode_pid(0xEE, bytes([0]))

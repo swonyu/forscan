@@ -1520,3 +1520,23 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   under the mask bug while the committed decoder stays correct. No `src/` change (code already
   correct); no box ticked (hardening, not a feature). Verified by RUNNING: canonical suite 629 →
   **`Ran 630 tests in 2.190s … OK`** (+1). No forbidden category, no hardware in the loop.
+- **Iter 147** — **Review-pass hardening** (no open `[ ]` box; both `[~]` remainders —
+  0.2 real vendor-`.dylib` load/on-car call, 4.2/R7 pyinstaller `.app` — are
+  [NEEDS ON-CAR CHECK]/owner-Mac-only, so per Phase 5 "shift to hardening/review"). Swept the
+  Mode 01 PID scaling decoders (`obd/pids.py`), spec-critical SAE J1979 math. Found a **coverage
+  gap, not a bug**: the two SIGNED decoders were pinned only on the non-negative side —
+  `test_fuel_trim_zero_and_positive` covers A=128→0 / A=192→+50 (the test *name* concedes it) and
+  `test_timing_advance` covers only A=128→0. The whole diagnostic point of fuel trim and timing
+  advance is the NEGATIVE half (rich correction / spark retard), so a sign-dropping decoder
+  (`abs(A-128)`) or a dropped `-64` offset would slip past every existing test. Added 2
+  spec-anchored pins to `tests/test_obd.py` (hand-derived from the J1979 formulas, NOT the
+  decoder): fuel trim `(A-128)*100/128` at **A=0 → -100.0** (spec min), **A=64 → -50.0** (straddles
+  zero from below), **A=255 → 99.21875** (spec max / the /128 fraction), plus **0x2D EGR-error**
+  sharing the same signed formula (A=0 → -100.0); and timing advance `A/2-64` at **A=0 → -64.0**
+  (full retard) and **A=255 → 63.5** (spec max). **Positive paths fired** (verbose:
+  `test_fuel_trim_negative_range … ok`, `test_timing_advance_signed_endpoints … ok`). Proven
+  **non-vacuous by mutation**: an `abs(A-128)` fuel-trim + offset-dropped timing mutant reddens
+  both pins (`100.0 != -100.0`, `0.0 != -64.0`); the committed decoders stay correct and `pids.py`
+  was restored byte-identical. No `src/` change (code already correct); no box ticked (hardening,
+  not a feature). Verified by RUNNING: canonical suite 630 → **`Ran 632 tests in 2.181s … OK`**
+  (+2). No forbidden category, no hardware in the loop.
