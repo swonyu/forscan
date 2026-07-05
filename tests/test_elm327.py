@@ -349,5 +349,60 @@ class Elm327EndToEndReadTests(unittest.TestCase):
         self.assertEqual(uds.read_data_by_identifier(0xF190), b"123")
 
 
+class Elm327MultiframeWriteTests(unittest.TestCase):
+    """The multiframe SEND path composed through the real wire codec -- the substrate
+    every As-Built / UDS write rides on (Tier-4, the safety-critical half). Every prior
+    multiframe integration test (iters 109/110/129/130) was a READ; the WRITE path --
+    send the First Frame, await the ECU's FlowControl AMID live-bus chatter, then stream
+    the Consecutive Frames -- was never composed end-to-end through elm327. _await_cts()
+    leans on the same _recv_matching skip logic iter 130 only exercised on the read side;
+    this pins it on the write side and asserts the exact ISO-TP wire bytes stream in order
+    (not merely 'no exception')."""
+
+    def test_multiframe_send_awaits_flow_control_past_bus_noise(self):
+        # 11-byte payload -> ISO 15765-2 segmentation, hand-derived from the byte format
+        # (NOT read off the code under test):
+        #   FF:        10 0B | A0 A1 A2 A3 A4 A5        (PCI 0x10, len 0x00B = 11, first 6)
+        #   CF1 (SN=1): 21   | A6 A7 A8 A9 AA | 00 00   (last 5 bytes, zero-padded to 8)
+        payload = bytes(range(0xA0, 0xAB))  # A0..AA, 11 bytes
+        expected_wire = ["100BA0A1A2A3A4A5", "21A6A7A8A9AA0000"]
+
+        class NoisyFcWritePort:
+            """Records every pure-hex frame written. When it sees the First Frame it
+            replies with a non-matching NOISE frame (0x7DF) BEFORE the real FlowControl
+            (0x7E8 30 00 00) -- so the send path must skip the noise to find its CTS."""
+
+            def __init__(self):
+                self.sent_hex = []
+                self._armed = None
+
+            def write(self, data):
+                text = bytes(data).decode("ascii", "ignore").strip()
+                if not text or text.upper().startswith("AT"):
+                    return len(data)          # reset / ATSH header / etc. -> just a prompt
+                self.sent_hex.append(text)
+                if text[:1] == "1":           # First Frame (PCI nibble 1) -> arm noise + FC
+                    self._armed = ("7DF 02 01 00 00 00 00 00\r"
+                                   "7E8 30 00 00 00 00 00 00")
+                return len(data)
+
+            def read(self, size=1):
+                if self._armed is not None:
+                    block, self._armed = self._armed, None
+                    return (block + "\r>").encode("ascii")
+                return b">"
+
+            def close(self):
+                pass
+
+        port = NoisyFcWritePort()
+        t = Elm327Transport(port)
+        t.open()
+        sock = IsoTpSocket(t, tx_id=0x7E0, rx_id=0x7E8)
+        sock.send(payload)  # raises IsoTpTimeout if the FC is lost behind the noise frame
+        # Positive path fired: FF + exactly one CF streamed, byte-exact and in order.
+        self.assertEqual(port.sent_hex, expected_wire)
+
+
 if __name__ == "__main__":
     unittest.main()

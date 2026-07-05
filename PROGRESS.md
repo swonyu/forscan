@@ -1032,3 +1032,366 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   whole native-macOS web app). Corrected the layer diagram (real backends, webapp top layer, the
   richer obd surface) + added Phase 4. `FIRST_RUN.md` checked — already current (leave it). Docs-
   currency sweep now complete (README iter 88, DESIGN iter 89, FIRST_RUN current). 412 green.
+- **Iter 131** (multiframe WRITE path survives interleaved bus traffic — closing the read/write
+  asymmetry) — The iter 109/110/129/130 multiframe integration tests were ALL reads (VIN/DID); the
+  SEND substrate every As-Built / UDS *write* rides on — send the First Frame, await the ECU's
+  FlowControl AMID live-bus chatter, then stream the Consecutive Frames — had never been composed
+  end-to-end through the elm327 wire codec. `_await_cts` leans on the same `_recv_matching` skip logic
+  iter 130 only proved on the read side. Confirmed by measurement (an 11-byte payload segments to the
+  hand-derived ISO-TP wire bytes `100BA0A1A2A3A4A5` + `21A6A7A8A9AA0000` and streams IN ORDER past a
+  0x7DF noise frame injected before the FC), straddle-checked that the identical path *raises*
+  IsoTpTimeout when only the noise arrives (so the assertion is load-bearing, not vacuous), then locked
+  `test_multiframe_send_awaits_flow_control_past_bus_noise`. +1 test → **449 green**. — The real-adapter
+  wire-path hardening thread (128 noisy init · 129 split reads · 130 interleaved read · 131 interleaved
+  write) is now essentially exhausted; per ROADMAP "padding is the enemy," do NOT manufacture more
+  arrival-pattern micro-tests. **NEXT (owed, higher-value, do not skip for busywork):** the
+  safety/security/honesty/robustness AUDIT re-run and the R3/R5 diagnostic research re-run — both FAILED
+  rate-limited on 2026-07-04; run them SERIALIZED (never overlapping) per that day's rate-limit lesson.
+- **Iter 132** (owner supplied a real As-Built map — ingest it, honestly) — The owner handed over the
+  **2GFusions "Ford As-Built Data Mods" sheet (DanMc85, tid=4573)** — the canonical community source
+  the research already cited. This is exactly what ROADMAP anticipated ("real maps come from
+  FORScan/the owner, labeled UNVERIFIED"), so it supersedes the generic NEXT for one iteration.
+  Preserved the full **2014+ MY** transcription in `docs/reference/asbuilt_2gfusions_fusion_2gen.md`
+  (provenance-headed, scoped to the 2016 S; 2013-MY variants excluded — different blocks). Added a
+  structured, tested catalog `ford/fusion_2016_asbuilt.py` (`AsBuiltFeatureRef` + 18 entries) plus
+  `additive_checksum`. **Honesty gates:** deliberately restricted to features on FordScope's CONFIRMED
+  modules (BCM 726 / IPC 720 / APIM 7D0); every entry `verified=False` + sourced; it's a REFERENCE
+  catalog, NOT wired to live read/write (the block→UDS-DID map is not on file → stays NEEDS ON-CAR
+  CHECK). **Verified by measurement:** +8 tests → **457 green**. Cross-checks that genuinely straddle —
+  every module address is a confirmed `fusion_2016` module, every block label matches its module
+  address, and every full-line value (`726-15/16/17`) carries a correct Ford additive checksum (the
+  helper pinned to the report's own `760-01-04 3733 → D6` worked example, then applied to all full-line
+  values, so a one-nibble transcription slip fails the suite). The sheet's other modules
+  (DDM/PDM/ACM/SCCM/FCIM/HSWM) stay in the reference doc until their addresses are confirmed on-vehicle.
+  [Commit BLOCKED this session — same `.git` write-restriction as iter 131; changes saved in the
+  working tree for a host-side commit.]
+- **Iter 133** (expand the As-Built catalog to the remaining modules — with a real honesty tier) —
+  Grew `ford/fusion_2016_asbuilt.py` past the confirmed core (726/720/7D0) to the sheet's other
+  modules: **DDM 740, PDM 741, ACM 727, SCCM 724, FCIM 7A7, HSWM 714, FCDIM 7A5** — +10 entries →
+  **28 across 10 modules** (18 confirmed + 10 plausible). The honest way to do this was NOT to
+  silently accept unconfirmed addresses: added a per-entry `module_confidence`, registered the new
+  modules in `fusion_2016.py` as **plausible** (with trim caveats — premium/Sony audio and the
+  heated-wheel module are likely ABSENT on a base 2.5L S), and replaced iter 132's confirmed-only
+  gate with a **registry-consistency gate** — each entry's `module_confidence` must mirror
+  `fusion_2016`'s tag, and any module absent from the registry can never be `confirmed`. Also fixed
+  the model-year test: `2013+` / `2013-2016` ranges legitimately cover a 2016 (the old check wrongly
+  rejected any "2013" substring), so it now asserts each entry's MY range *covers 2016* while still
+  excluding 2013-only blocks. **Verified by measurement:** +1 net test → **458 green**; the
+  confirmed set is unchanged (`test_cli` + `test_fusion_2016` still green, so the confident scan is
+  untouched). Straddle-checked both gates — a DDM entry mistagged `confirmed` is rejected
+  (registry says plausible), and a bare `2013` MY fails the coverage check. Still reference-only
+  (no block→DID map) and commit still env-blocked (host-side commit pending).
+- **Iter 134** (surface the community As-Built catalog through the CLI — READ-ONLY, honesty-
+  preserving) — Iters 132–133 built the 28-entry/10-module catalog but it was data-only and
+  invisible to a user; this iteration makes it browsable without touching the live path at all.
+  New `ford/asbuilt_catalog_view.py`: `filter_features(catalog, module=, search=)` (module accepts
+  a name like "BCM"/"IPC" OR a numeric/hex address like `0x726`; search is a case-insensitive
+  substring over name+key; both AND together, no match -> `[]`, never raises) and
+  `format_catalog(...)` (renders the `COMMUNITY-SOURCED · UNVERIFIED · NEEDS ON-CAR CHECK` header +
+  the `SOURCE` line on EVERY render — including an empty/no-match result — then groups by module,
+  each feature showing name/block_line/`module (module_confidence)`/bits/options as
+  "value = meaning"). `webapp/controller.asbuilt_features(module=, search=)` returns the same
+  filtered set as structured dicts (key/module/module_addr/module_confidence/block_line/bits/kind/
+  options/my/verified/note) — deliberately has NO `_require()` and never touches `self.transport`,
+  so it can't be confused with a live read. CLI `asbuilt-features [--module M] [--search S]`
+  (static listing, dispatched before `open_backend`, like `features`). Wired
+  `filter_features`/`format_catalog` into `ford/__init__.py`'s exports (matching the
+  `fusion_2016_asbuilt` convention) and `FUSION_2016_ASBUILT`/`format_catalog` into `cli.py`'s
+  import block. **Verified by measurement:** +24 net tests (16 filter/render unit tests, 4
+  controller tests, 4 CLI tests) → **482 green**. Straddle-checked: `module="IPC"` returns exactly
+  the 4 hand-counted 0x720 entries and excludes a BCM-only block_line; `search="honk"` matches
+  both door/lock honk features (incl. one whose match is in the KEY not the display name) and
+  excludes an unrelated gauge feature; `module="IPC"` AND `search="honk"` (BCM-only) correctly
+  ANDs to empty; a garbage `--module 0xZZZZ` and an empty/whitespace filter both degrade cleanly
+  (full catalog or `[]`) with no crash and the honesty header still printed. Also caught and fixed
+  a real drift-guard failure my own change triggered: the pre-existing
+  `test_readme_documents_every_cli_command` (iter 126) failed because `asbuilt-features` wasn't in
+  the README yet — added it to the command list + a "What it does" bullet, so the guard now passes
+  because the docs are actually current, not because the guard was loosened. Deliberately did NOT
+  touch `fusion_2016_asbuilt.py`'s data (values/meanings/verified flags byte-identical — confirmed
+  via `git diff`), the never-build list, or wire anything to live UDS read/write: this is a pure
+  query+format layer over the existing static tuple. Commit still env-blocked this session (same
+  `.git` write-restriction as iters 131–133; changes left in the working tree for a host-side
+  commit).
+- **Iter 135** (surface the community As-Built catalog in the native-macOS web UI — mirrors iter
+  134's CLI work; READ-ONLY, honesty-preserving) — the catalog was already browsable from the
+  terminal but invisible from the Mac app, which is the tool's primary daily-driver surface. New
+  `GET /api/asbuilt-features` on `webapp/server.py` (optional `module`/`search` query params →
+  `controller.asbuilt_features(...)`, already built in iter 134): deliberately does **not** call
+  `controller.snapshot()`/require a connection — matches the controller method's own contract that
+  it never touches `self.transport`. Every response (including an empty/no-match result) carries
+  top-level `caveat`/`source` fields sourced from a new public `asbuilt_catalog_view.CATALOG_CAVEAT`
+  constant (aliases the existing private `_HEADER` so the JSON and `format_catalog()`'s text render
+  stay byte-identical, never duplicated/drifted) + `fusion_2016_asbuilt.SOURCE`, re-exported through
+  `ford/__init__.py`. Browser page: a new "As-Built catalog (reference)" row (module/search text
+  inputs) + `showAsBuiltCatalog()` (fetch → render a table with Feature/Module/Confidence/Block-line/
+  Options columns, `escapeHtml`-sanitized) into a dedicated `#asbuilt` div, PLUS a static
+  always-visible `COMMUNITY-SOURCED · UNVERIFIED · NEEDS ON-CAR CHECK` caveat line in the page
+  template itself (belt-and-suspenders: visible even if the fetch hasn't completed/fails) and a
+  second dynamic render of the endpoint's own `caveat`/`source` fields on every successful fetch
+  (including empty results) so the two can never drift apart. **Verified by measurement:** +8 net
+  tests (5 endpoint tests: no-connection-required, module filter → exactly the 4 hand-counted
+  IPC/0x720 entries, search="honk" → exactly `{door_close_double_honk, lock_honk_2x_fob}`, no-match
+  → `[]` not an error, blank params → full catalog; 2 tests pinning the JSON carries the real
+  `SOURCE` constant + caveat text on both a populated AND an empty/no-match response; 1 structural
+  page test) → **490 green**. Adversarially probed beyond the unit tests by running the live server
+  directly (not asserted-and-trusted, executed): a garbage `?module=0xZZZZ` → 200/no crash (caught
+  internally, pre-existing `_module_matches` guard); numeric `?module=726` correctly resolves to the
+  BCM hex address → 13 entries (hand-recount of the BCM rows in `fusion_2016_asbuilt.py` confirms
+  13); both filters ANDing to empty still carries the caveat; a bare `?` → full 28-entry catalog; a
+  `<script>` string in `search` → clean empty match, nothing reflected. Verified the browser-side
+  JS by RUNNING it, not by inspection: extracted the real served `<script>` block and executed
+  `showAsBuiltCatalog()` in Node against a fake DOM/fetch four ways — positive render (caveat +
+  SOURCE + module_confidence="confirmed" + feature name + block_line all present), empty/no-match
+  render (caveat/SOURCE still present, "No matching As-Built features." shown), a rejected fetch
+  (caught, no uncaught throw, shows a plain error string), and an XSS probe (a hostile
+  `<img onerror=...>` feature name comes back HTML-escaped, not executable) — all four PASS,
+  pasted verdicts in-session. `node --check` confirms the page's `<script>` block is still valid
+  JS and the raw-string invariant (`test_index_html_is_raw_so_js_escapes_survive`) still holds.
+  README: reworded the existing "Community As-Built catalog browser" bullet to cover both surfaces
+  (CLI + the new web section) and the new endpoint; no CLI-command-list drift (no command was
+  added this iteration, so `test_readme_documents_every_cli_command` is unaffected) and there is no
+  equivalent drift-guard for `/api/*` endpoints in this repo (checked — only the CLI list is
+  guarded), so none needed fixing. Un-automated sliver, honestly labelled: no browser-automation
+  tooling was available in this environment, so the actual rendered PIXELS were never eyeballed —
+  the served-HTML/JS structure and the Node-executed rendering logic are verified by
+  measurement, but a literal screenshot check is `NEEDS ON-CAR`-style manual confirmation, owed to
+  the owner. Deliberately did NOT touch the catalog data, any `verified` flag, or wire anything to
+  live UDS read/write — pure display layer, same as iter 134. Commit still env-blocked this session
+  (same `.git` write-restriction as iters 131–134); changes left in the working tree for a host-side
+  commit.
+- **Iter 136** (user-facing As-Built line CHECKSUM tool — compute + verify) — after an As-Built
+  line is hand-edited, the trailing per-line checksum byte must be recomputed or the module
+  rejects/mis-reads it; `additive_checksum` (iter 134, spec-verified against the documented
+  worked example) existed only as an internal cross-check, not a user tool. Added two pure
+  helpers next to it in `ford/fusion_2016_asbuilt.py`: `parse_hex_bytes(text)` (flexible hex
+  parsing — accepts a bare run `"0101010101"` or spaced pairs `"01 01 01 01 01"`, raises
+  `ValueError` on odd-length/non-hex/empty input, never crashes or silently truncates) and
+  `verify_full_line(block_line, full_line_hex)` (re-derives the additive checksum over label+data
+  and compares it to the trailing byte, returning an `AsBuiltLineCheck(valid, expected_checksum,
+  actual_checksum)`; raises `ValueError` on a malformed label or bad hex). New CLI subcommand
+  `asbuilt-checksum <block-line> <hex>` (compute mode; prints the checksum byte) with a
+  `--verify` form (full-line mode; prints VALID/INVALID + both the stored and expected byte) —
+  wired as a static/pure listing (no `--backend`/`--port` needed, same tier as `asbuilt-features`).
+  Both re-exported through `ford/__init__.py`. **Every output path — compute, VALID, and
+  INVALID — prints a fixed one-line note that this checks the LINE checksum only and does NOT
+  verify the values are correct for the vehicle (`NEEDS ON-CAR CHECK`)**, so a green checksum can
+  never be read as "safe to write." TEST-FIRST, expected values hand-derived independently of the
+  implementation (see the arithmetic in the test comments, cross-checked by hand before writing
+  any code): `760-01-04` + `37 33` → `0xD6` (the spec's own worked example, re-used); `726-17-01`
+  + `01×5` → label(07+26+17+01=0x45) + data(5) = `0x4A`; full line `726-17-01`/`01010101014A` is
+  VALID (expected==actual==0x4A); flipping the first data byte to `02` (`02010101014A`, same
+  stored checksum `4A`) is INVALID with hand-derived expected byte `0x4B` (label 0x45 + flipped
+  data 6 = 0x4B). Also covered: spaced-hex parsing agrees with bare-hex, and clean `ValueError`
+  (never a crash) on odd-length hex, non-hex characters, empty input, and a malformed label with
+  no dashes (both too-few and too-many dash-splits — confirmed by hand that Python's own tuple-
+  unpack on `.split("-")` already raises `ValueError` for both, so no extra validation code was
+  needed there). **Verified by measurement:** 14 new tests in `test_fusion_2016_asbuilt.py`
+  (`ParseHexBytesTests` ×6, `VerifyFullLineTests` ×8) + 6 new CLI tests in `test_cli.py`
+  (compute/spaced-hex/verify-valid/verify-invalid-with-expected-byte/bad-hex-clean-error/
+  no-vehicle-needed) → baseline 490 green → **`Ran 509 tests in 1.744s … OK`**. Manually ran the
+  built CLI (not just unit-asserted) for all six shapes — compute, spaced-hex compute, verify
+  VALID, verify INVALID, bad hex (`01Z` → clean `error:` on stderr, exit 2, no traceback), and a
+  malformed label (`726` with no second dash → clean error, exit 2) — every line of real stdout
+  pasted and checked by eye against the hand-derivation above. README: added a new "As-Built line
+  checksum tool" bullet + the `asbuilt-checksum <block-line> <hex> [--verify]` entry in the
+  command list, which the pre-existing `test_readme_documents_every_cli_command` drift-guard
+  caught red before the fix (confirmed the guard actually fired, not just assumed). Adversarially
+  reviewed the diff (`git diff` on `cli.py`/`ford/__init__.py`; the new `fusion_2016_asbuilt.py`/
+  `test_fusion_2016_asbuilt.py` files are untracked from iter 134, so no linear diff exists for
+  them — read the final file in full instead): confirms no new UDS DID, no live vehicle I/O, no
+  write path — this is pure hex/int arithmetic on user-supplied strings, offline. Commit still
+  env-blocked this session (same `.git` write-restriction as iters 131–135); changes left in the
+  working tree for a host-side commit.
+- **Iter 137** (As-Built line DECODER / reverse-lookup — the capstone read: given a raw
+  block-line label off a FORScan screen, what is it and does its checksum add up) — every prior
+  As-Built CLI tool required already knowing a feature's name (`asbuilt-features`) or already
+  having a hex value to checksum (`asbuilt-checksum`); this closes the loop for the actual user
+  moment — staring at `726-41-02` on a screen with no idea what it is. New pure helper
+  `features_at_block_line(block_line, catalog=FUSION_2016_ASBUILT)` in `ford/fusion_2016_asbuilt.py`
+  (case-insensitive, whitespace-tolerant exact match on `block_line`; empty/whitespace/garbage
+  input and an unknown label all degrade to `[]`, never raise — placed after the catalog tuple
+  since its default argument references `FUSION_2016_ASBUILT`) and a new renderer
+  `format_block_line_lookup(block_line, features)` in `ford/asbuilt_catalog_view.py` (mirrors
+  `format_catalog`'s honesty contract exactly: the `COMMUNITY-SOURCED · UNVERIFIED · NEEDS
+  ON-CAR CHECK` header + `SOURCE` on every render including the no-match case, which prints a
+  clean "No catalog feature recorded at this line — reference only" message instead of nothing).
+  New CLI subcommand `asbuilt-lookup <block-line> [--line <full-hex>]` (static/pure tier, same as
+  `asbuilt-features`/`asbuilt-checksum` — dispatched before `open_backend`, no `--backend`/`--port`
+  needed): lists the catalog feature(s) at that line; with `--line` it ALSO runs
+  `verify_full_line()` (checksum VALID/INVALID + expected byte) and, for each `full_line`-kind
+  feature at that block, does an EXACT (not substring) case-insensitive hex comparison against
+  every option value, reporting `matches: <meaning>` or "not a recognized community option" (with
+  the known options listed). For `nibble`/`byte`-kind features it deliberately prints the bits
+  mask and an honest "per-nibble/byte decoding of a partial value is not attempted" note rather
+  than guessing which option a partial value encodes — the catalog only records the CHANGED
+  field, not the surrounding unchanged bytes, so a specific-nibble decode from a full-line paste
+  would be fabricated, not derived. Every `--line` output ends with the fixed
+  `NEEDS ON-CAR CHECK` disclaimer (checksum-VALID ≠ safe-for-the-vehicle), same wording as
+  `asbuilt-checksum`. Both helpers re-exported through `ford/__init__.py`.
+  **TEST-FIRST, hand-derived (never read off the implementation):** `726-17-01` is
+  `global_windows_close`'s block_line and no other entry's (confirmed by reading the catalog);
+  `7D0-01-01` is `reverse_camera`'s (APIM, has hex letters — exercises the case-fold);
+  `726-41-02` is `door_close_double_honk`'s (`nibble` kind); checksum arithmetic reused from
+  iter 136's already-hand-derived fixtures (`726-17-01` + `01010101014A` → label `0x45` + data
+  `5` = `0x4A`, VALID, IS the "enabled (default)" option; `726-17-01` + `000000000045` → label
+  `0x45` + data `0` = `0x45`, VALID, IS the "disabled" option; `726-17-01` +
+  `02010101014A`, flipped first data byte → label `0x45` + data `6` = `0x4B` ≠ stored `4A` →
+  INVALID with expected byte `4B`, and the raw hex is neither known option). **Verified by
+  measurement:** +24 net tests (8 in `test_fusion_2016_asbuilt.FeaturesAtBlockLineTests` incl.
+  case/space-insensitivity, empty/whitespace/garbage inputs, and default-vs-custom-catalog
+  isolation; 4 in `test_asbuilt_catalog_view.FormatBlockLineLookupTests` incl. the no-match
+  "reference only" render and a `plausible`-confidence feature never getting upgraded to
+  "confirmed"; 12 in `test_cli.CliTests` incl. two adversarial cases added after the first pass —
+  a whitespace-only block-line argument, and an EXACT-not-substring probe padding a known option
+  value with an extra leading byte and confirming no false "matches:" fires) → baseline 509 green
+  → **`Ran 533 tests in 1.861s … OK`**. Manually ran the built CLI (not just unit-asserted) for
+  all four required shapes and eyeballed every line of real stdout against the hand-derivation:
+  positive lookup+checksum+match (`726-17-01 --line 01010101014A` → VALID, `matches: enabled
+  (default)`), the honest nibble-kind non-guess (`726-41-02 --line 010101010149` → bits mask +
+  "not attempted", checksum still independently reported as INVALID for that arbitrary line),
+  unknown block (`999-99-99` → clean reference-only message, still carries the honesty header),
+  and bad hex (`--line 01Z` → `error:` on stderr, exit 2, no traceback; catalog listing on
+  stdout is unaffected/uncorrupted by the later hex-parse failure). README: added the "As-Built
+  line decoder / reverse-lookup" bullet + `asbuilt-lookup <block-line> [--line <hex>]` in the
+  command list — the pre-existing `test_readme_documents_every_cli_command` drift-guard caught
+  it red before the fix, confirmed by running it standalone both before and after. Adversarially
+  reviewed the diff (`git diff` on `cli.py`/`ford/__init__.py`; confirmed via direct Python check
+  that all 28 catalog entries still have `verified is False` and the option-match uses `==` not
+  `in` anywhere): no new UDS DID, no live vehicle I/O, no write path, no catalog data or
+  `verified` flag touched — pure reference lookup + display + offline checksum math, same tier
+  as iters 134–136. Commit still env-blocked this session (same `.git` write-restriction as
+  iters 131–136); changes left in the working tree for a host-side commit.
+- **Iter 138** (first-on-car-session PREP — the owner receives the Vgate vLinker FS in ~7 days;
+  R8 "graduation event," ROADMAP). This iteration ships a **plan**, not a result: nothing here
+  asserts any behavior verified on a vehicle. Two deliverables. (1) `docs/ON_CAR_VERIFICATION.md`
+  — a phased runbook for the FIRST real session (2016 Fusion 2.5L S + vLinker FS on macOS): a
+  safety preamble (backup-before-write + read-back verify for ANY As-Built write; WIRED
+  connection required for BdyCM/BCM central-config writes, since a dropped BLE link mid-write can
+  reboot the module; the three never-build boundaries stated in full); Phase 1 connection sanity
+  (vLinker FS = MIC3322+FT230XQ, ST-command-compatible but **not** a true STN; macOS is BLE-only
+  for wireless — no Bluetooth-Classic SPP; firmware-currency check; ISO 15765-4 protocol
+  confirmation); Phase 2 module presence (the full CONFIRMED/CONFIRM-ON-VEHICLE/PLAUSIBLE table
+  transcribed from `fusion_2016.py`, with the goal of promoting plausible→confirmed or recording
+  ABSENT — HSWM/ACM specifically flagged as likely absent on a base 2.5L S); Phase 3 As-Built
+  read+checksum on REAL data via `asbuilt-checksum --verify` (backup-first, read-only); Phase 4
+  read-only spot-check of low-risk community features via `asbuilt-lookup --line` (global-windows
+  726-17-01, double-honk 726-41-02), with any write explicitly gated behind backup-captured +
+  read-only-spot-check-succeeded + explicit owner go-ahead, and even then routed through the
+  existing `AsBuiltCoder` backup→write→read-back-verify path (no shortcut instructed); a "cannot
+  verify / out of scope" section (reflashing, PATS, SecurityAccess key derivation, emissions
+  manipulation); a closing section stating plainly this is a PLAN and real findings belong in
+  `PROGRESS.md`/`fusion_2016.py` updates afterward, not a rewrite of this file into a fake
+  "verified" narrative. (2) `fordscope preflight` — a new static/no-vehicle CLI subcommand,
+  dispatched before `open_backend` (same tier as `features`/`asbuilt-features`):
+  `format_preflight_checklist()` in `cli.py` iterates `fusion_2016.FUSION_2016_MODULES` directly
+  (grouped by confidence tag, each module's `.note` text included) so the printed module list
+  **cannot silently drift from the code** — no hardcoded copy of the module names exists anywhere
+  in the new code. Also prints the backup-before-write + wired-for-BdyCM safety gates, the
+  never-build boundary (emissions/PATS/SecurityAccess-crack, each named), and a
+  `NEEDS ON-CAR CHECK` closing line pointing at the full runbook. **TEST-FIRST, hand-derived from
+  reading `fusion_2016.py` directly (not from running the code under test):** 10 new tests in
+  `test_cli.py` — runs with no vehicle connection; lists all six CONFIRMED names (PCM/ABS/RCM/
+  APIM/IPC/BCM); renders the word "confirmed" attached to output; lists the plausible names named
+  in the task (DDM/PDM/ACM/SCCM/FCIM/HSWM/FCDIM) plus the word "plausible"; surfaces HSWM/ACM's
+  exact "likely ABSENT on base S" note text (not just the bare module name); contains
+  backup+before+write; contains "wired"; contains a never-build line (asserts at least one of
+  emissions/immobilizer/PATS/SecurityAccess is named AND the word "never" appears); contains
+  `NEEDS ON-CAR CHECK`; and a **drift-guard** — every module name in the live
+  `FUSION_2016_MODULES` list (all 18: 6 confirmed + 2 confirm-on-vehicle + 10 plausible) must
+  appear in the `preflight` output, so a future module added/renamed in `fusion_2016.py` without a
+  matching CLI update fails this test red. All 10 verified RED first (`argparse.ArgumentError:
+  invalid choice: 'preflight'`), then GREEN after implementation. Confirmed by running the actual
+  CLI (not just unit-asserted) — pasted the real `fordscope preflight` output and read it end to
+  end: header states "FIRST ON-CAR SESSION PLAN (nothing verified yet)," all three confidence
+  tiers present with per-module notes, both safety gates, all three never-build lines, and the
+  closing `NEEDS ON-CAR CHECK` pointer to the runbook — no line asserts a result as verified.
+  README: added a `preflight` feature bullet + the command to both the command list and the
+  `docs/ON_CAR_VERIFICATION.md` link; the pre-existing `test_readme_documents_every_cli_command`
+  drift-guard caught the gap red before the fix, confirmed by running it standalone both before
+  and after. Adversarially self-reviewed both deliverables: grepped `ON_CAR_VERIFICATION.md` for
+  premature-verified phrasing (none found) and confirmed the one write-instruction paragraph is
+  gated by backup-captured-first language directly above it (not a bare instruction). **Verified
+  by measurement:** baseline 533 green → **`Ran 543 tests in 1.861s … OK`**. Did not touch
+  `fusion_2016.py`'s confidence tags, the As-Built catalog, or any live read/write path — this
+  iteration is planning + a read-only-derived static checklist, nothing hardware-touching. Did
+  not run `git commit`/`git add` per this iteration's instruction; changes left in the working
+  tree.
+- **Iter 139** (native-macOS WEB UI parity with the CLI's As-Built decoder + checksum — iter
+  137's `asbuilt-lookup` was CLI-only; this closes the same gap iter 135 closed for the catalog
+  browser, so the owner can paste a raw As-Built line at the car and decode it in the app, not
+  just the terminal). READ-ONLY + checksum math; no live UDS wiring. New
+  `FordScopeController.asbuilt_lookup(block_line, line=None)` in `webapp/controller.py` — reuses
+  `features_at_block_line` + `verify_full_line` verbatim (no reimplemented option-matching logic;
+  same exact-not-substring, case-insensitive comparison as the CLI's `asbuilt-lookup --line`),
+  deliberately does **not** require a connection (no `_require()`, never touches
+  `self.transport`), and returns `{"features": [...], "checksum": None|{"valid","expected",
+  "actual"}}`. Each feature row carries the same fields as `asbuilt_features()` (name/module/
+  module_confidence/bits/kind/options/verified/note) PLUS a new `matched_option` key: for a
+  `full_line`-kind feature with a `line` given, the option's meaning on an EXACT hex match or
+  `None`; for `nibble`/`byte`-kind features, or when no `line` is given, ALWAYS `None` — the
+  catalog only records the changed field, so decoding a partial value would be a fabricated
+  guess, never attempted (mirrors the CLI's honest refusal verbatim). Bad hex in `line` raises
+  `ValueError` (distinct from an unknown `block_line`, which cleanly degrades to `features: []`).
+  New `GET /api/asbuilt-lookup?block_line=…&line=…` on `webapp/server.py`: blank/missing
+  `block_line` → clean 200 with an empty feature list (never a 500 — `features_at_block_line`
+  never raises on that), bad `line` hex → the existing outer `except ValueError → 400` clause
+  (same convention as `/api/read`'s bad-hex PID), and every response — including the empty/
+  no-match case — carries the same top-level `caveat`/`source` fields as `/api/asbuilt-features`
+  (from the same `ASBUILT_CAVEAT`/`ASBUILT_SOURCE` constants, so the two endpoints can never
+  drift apart). Browser: a new "Decode As-Built line" row (`#asbuiltLookupBlockLine` +
+  `#asbuiltLookupLine` text inputs + a button) + `showAsBuiltLookup()` (fetch → render into a new
+  `#asbuiltLookup` div: the checksum VALID/INVALID verdict with the stored/expected hex bytes, a
+  restated "VALID means only self-consistent, NOT correct-for-the-vehicle (NEEDS ON-CAR CHECK)"
+  line directly under it, then a table of matched feature(s) with module/confidence/kind/bits/
+  options/matched-option columns) PLUS a static always-visible caveat line in the page template
+  itself (belt-and-suspenders, same pattern as iter 135's catalog section) — every render path,
+  including checksum-INVALID and no-match, keeps the caveat/SOURCE/`module_confidence` visible.
+  All user-derived strings (feature name, module, kind, bits, options, matched option, block_line
+  is never reflected back but `caveat`/`source` are) route through the existing `escapeHtml()`
+  helper before hitting `innerHTML` — no new unescaped injection point added.
+  **TEST-FIRST, hand-derived (reusing the SAME fixtures already hand-derived independently in
+  iters 136–137, not re-derived from the implementation):** `726-17-01` label = 07+26+17+01 =
+  0x45; `01010101014A` (data 01×5=5) → checksum 0x4A, VALID, matches "enabled (default)";
+  `000000000045` (data 0) → checksum 0x45, VALID, matches "disabled"; `02010101014A` (first byte
+  flipped 01→02, data=6) → checksum 0x4B ≠ stored 0x4A, INVALID, `matched_option=None`;
+  `726-41-02` (`door_close_double_honk`, kind=`nibble`) → `matched_option` always `None`
+  regardless of `line`; a `FF`-padded known-option value (`FF01010101014A`) must NOT report
+  "enabled (default)" (adversarial exact-not-substring probe, same shape as iter 137's CLI test).
+  **Verified by measurement:** +8 controller tests + 7 endpoint tests + 1 structural page test →
+  baseline 543 green → **`Ran 559 tests in 2.038s … OK`**. Beyond the unit suite, exercised the
+  REAL live server directly (not asserted-and-trusted, executed): `GET
+  /api/asbuilt-lookup?block_line=726-17-01&line=01010101014A` over an actual
+  `ThreadingHTTPServer` instance returns `module_addr:1830` (=0x726), `checksum:{valid:true,
+  expected:74,actual:74}` (=0x4A), `matched_option:"enabled (default)"` — byte-identical to the
+  hand-derivation; bad hex → clean 400 with a plain error message, not a traceback; missing/
+  unknown `block_line` → clean 200 empty list with the caveat intact; the `FF`-padded probe →
+  `matched_option:null` (its own genuinely-different checksum, not a false match); the nibble-kind
+  feature → `matched_option:null` unconditionally. Verified the browser-side JS by RUNNING it, not
+  by inspection (same technique as iter 135): extracted the real served `<script>` block,
+  `node --check`-validated it, and executed `showAsBuiltLookup()` in Node against a fake DOM/fetch
+  across 5 scenarios (19 individual assertions, all PASS) — positive render (VALID + matched
+  option + caveat + SOURCE + module_confidence all present), INVALID-checksum render (expected
+  byte surfaced, no fabricated match), no-match/unknown-block_line render (caveat/SOURCE survive
+  an empty result, checksum block correctly omitted), a rejected fetch (caught, no uncaught throw,
+  plain error text), and an XSS probe (a hostile `<img onerror>` feature name AND a hostile
+  `<script>` SOURCE string both come back HTML-escaped, never raw/executable). Captured the exact
+  rendered `innerHTML` for the required case (`726-17-01` + `01010101014A`) via the same Node
+  harness — pasted in full in this iteration's report. Un-automated sliver, honestly labelled: no
+  browser-automation tooling was available in this environment, so literal rendered PIXELS were
+  never eyeballed (same gap iter 135 disclosed for the catalog browser) — the served HTML/JS
+  structure, the live-server JSON contract, and the Node-executed render logic are all verified by
+  measurement; a screenshot check is owed to the owner, same as iter 135. Adversarially
+  self-reviewed the diff (`git diff --stat` confirms only `webapp/controller.py`,
+  `webapp/server.py`, `README.md`, and the two test files changed — `fusion_2016_asbuilt.py`/
+  `asbuilt_catalog_view.py`/`fusion_2016.py` show zero diff and predate this session by file
+  mtime, so no catalog data or `verified`/`module_confidence` tag was touched): no new UDS DID, no
+  live vehicle I/O, no write path — pure reference lookup + offline checksum math reused verbatim
+  from iters 134/136/137, now reachable from the Mac app. README: reworded the existing "As-Built
+  line decoder / reverse-lookup" bullet to cover both surfaces (CLI + the new web section) and the
+  new endpoint, mirroring how iter 135 reworded the catalog-browser bullet; the
+  `test_readme_documents_every_cli_command` drift-guard is unaffected (no CLI command was added
+  this iteration — `asbuilt-lookup` already existed since iter 137) and there is still no
+  equivalent drift-guard for `/api/*` endpoints in this repo (checked, per iter 135's note), so
+  none needed fixing. Did not run `git commit`/`git add` per this iteration's instruction; changes
+  left in the working tree for a host-side commit.

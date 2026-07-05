@@ -60,6 +60,103 @@ class ControllerTests(unittest.TestCase):
         with self.assertRaises(NotConnectedError):
             FordScopeController().scan()
 
+    def test_asbuilt_features_works_without_connecting(self):
+        # Reference/display-only data: it must NOT need a live vehicle connection
+        # (this is what keeps it decoupled from any live UDS read/write).
+        rows = FordScopeController().asbuilt_features()
+        self.assertTrue(rows)
+
+    def test_asbuilt_features_returns_structured_dicts_with_honesty_fields(self):
+        rows = FordScopeController().asbuilt_features(module="IPC")
+        self.assertEqual(len(rows), 4)  # hand-derived: 4 entries at IPC/0x720
+        for row in rows:
+            self.assertEqual(row["module"], "IPC")
+            self.assertEqual(row["module_addr"], 0x720)
+            self.assertIn("module_confidence", row)
+            self.assertIn("block_line", row)
+            self.assertIn("options", row)
+            self.assertFalse(row["verified"])  # community data must never read verified=True
+
+    def test_asbuilt_features_search_filters_to_honk_features_only(self):
+        rows = FordScopeController().asbuilt_features(search="honk")
+        keys = {r["key"] for r in rows}
+        self.assertEqual(keys, {"door_close_double_honk", "lock_honk_2x_fob"})
+
+    def test_asbuilt_features_no_match_returns_empty_list_not_a_crash(self):
+        rows = FordScopeController().asbuilt_features(search="nonexistent_feature_zzz")
+        self.assertEqual(rows, [])
+
+    def test_asbuilt_lookup_works_without_connecting(self):
+        # Reference/checksum-math only: must NOT need a live vehicle connection, exactly
+        # like asbuilt_features. Uses the same hand-derived block_line as the CLI's
+        # asbuilt-lookup tests (test_cli.py) and test_fusion_2016_asbuilt.py.
+        result = FordScopeController().asbuilt_lookup("726-17-01")
+        self.assertEqual(len(result["features"]), 1)
+        self.assertEqual(result["features"][0]["key"], "global_windows_close")
+        self.assertIsNone(result["checksum"])  # no `line` given -> no checksum computed
+
+    def test_asbuilt_lookup_with_line_reports_valid_checksum_and_matched_option(self):
+        # Hand-derived (identical fixture to the CLI/catalog tests): 726-17-01 label =
+        # 07+26+17+01 = 0x45; data 01*5 = 5; total 0x4A, matching the trailing byte ->
+        # VALID. "01010101014A" IS global_windows_close's "enabled (default)" option.
+        result = FordScopeController().asbuilt_lookup("726-17-01", line="01010101014A")
+        self.assertEqual(len(result["features"]), 1)
+        row = result["features"][0]
+        self.assertEqual(row["key"], "global_windows_close")
+        self.assertTrue(result["checksum"]["valid"])
+        self.assertEqual(result["checksum"]["expected"], 0x4A)
+        self.assertEqual(result["checksum"]["actual"], 0x4A)
+        self.assertEqual(row["matched_option"], "enabled (default)")
+
+    def test_asbuilt_lookup_with_line_matches_the_disabled_option(self):
+        # Hand-derived: label 0x45 + data (00*4=0) = 0x45, matching trailing byte 0x45 ->
+        # VALID; "000000000045" is global_windows_close's "disabled" option value.
+        result = FordScopeController().asbuilt_lookup("726-17-01", line="000000000045")
+        self.assertTrue(result["checksum"]["valid"])
+        self.assertEqual(result["features"][0]["matched_option"], "disabled")
+
+    def test_asbuilt_lookup_with_line_wrong_checksum_reports_invalid_and_expected_byte(self):
+        # Flip the first data byte 01->02 but keep the original trailing checksum byte
+        # (4A). Hand-derived: label 0x45 + data(02+01+01+01+01=6) = 0x4B != stored 0x4A
+        # -> INVALID, with the expected byte surfaced (not just "wrong").
+        result = FordScopeController().asbuilt_lookup("726-17-01", line="02010101014A")
+        self.assertFalse(result["checksum"]["valid"])
+        self.assertEqual(result["checksum"]["expected"], 0x4B)
+        self.assertEqual(result["checksum"]["actual"], 0x4A)
+        # The flipped hex string is not any of global_windows_close's option values.
+        self.assertIsNone(result["features"][0]["matched_option"])
+
+    def test_asbuilt_lookup_option_match_is_exact_not_substring(self):
+        # Adversarial: a value that embeds a known option as a substring (but is not
+        # equal to it) must NOT be reported as a match. Padding the known
+        # "enabled (default)" value with a leading byte keeps the exact hex substring
+        # present in the input while changing the actual value.
+        result = FordScopeController().asbuilt_lookup("726-17-01", line="FF01010101014A")
+        for row in result["features"]:
+            self.assertNotEqual(row.get("matched_option"), "enabled (default)")
+
+    def test_asbuilt_lookup_on_nibble_kind_feature_does_not_guess_the_option(self):
+        # 726-41-02 is door_close_double_honk, kind="nibble" -- a partial-value feature.
+        # matched_option must be None (never a fabricated guess) because the catalog
+        # only records the CHANGED field, not the surrounding unchanged bytes.
+        result = FordScopeController().asbuilt_lookup("726-41-02", line="010101010149")
+        self.assertEqual(len(result["features"]), 1)
+        row = result["features"][0]
+        self.assertEqual(row["kind"], "nibble")
+        self.assertIsNone(row["matched_option"])
+
+    def test_asbuilt_lookup_unknown_block_line_returns_empty_features_not_a_crash(self):
+        result = FordScopeController().asbuilt_lookup("999-99-99")
+        self.assertEqual(result["features"], [])
+        self.assertIsNone(result["checksum"])
+
+    def test_asbuilt_lookup_bad_hex_line_raises_valueerror(self):
+        # Bad hex is a genuine input error (distinct from "unknown block_line", which
+        # degrades cleanly to an empty list) -- raise so the server layer can turn it
+        # into a client 400, matching the existing bad-hex-query-param convention.
+        with self.assertRaises(ValueError):
+            FordScopeController().asbuilt_lookup("726-17-01", line="01Z")
+
     def test_connect_with_fusion_profile_scans_fusion_modules(self):
         c = FordScopeController()
         c.connect(DEMO_PORT, profile="fusion2016")
@@ -414,9 +511,169 @@ class ServerTests(unittest.TestCase):
         for path in ("/api/calibration", "/api/monitor-tests", "/api/dtc-states", "/api/drive-cycle"):
             self.assertIn(path, html)
 
+    def test_index_page_wires_asbuilt_catalog_section_with_honesty_caveat(self):
+        # The served page must fetch /api/asbuilt-features and render it with a VISIBLE
+        # honesty header + provenance + per-feature module_confidence -- so a browser
+        # eyeball can never mistake this static community catalog for verified/live
+        # data. The caveat text is present TWICE by design (defense-in-depth): once as
+        # a static, always-visible line (works even before any fetch completes) and
+        # once rendered dynamically from the endpoint's own caveat/source fields (so
+        # they can never drift from the JSON contract asserted in
+        # test_asbuilt_features_endpoint_carries_honesty_caveat_and_source). A literal
+        # rendered-pixels check is the one un-automated sliver (no browser tooling
+        # here); this pins the HTML/JS structure that would produce that rendering.
+        _s, raw = self._req("GET", "/")
+        html = raw.decode()
+        self.assertIn("/api/asbuilt-features", html)          # the fetch call is wired
+        self.assertIn("COMMUNITY-SOURCED", html)               # static, always-visible caveat
+        self.assertIn("UNVERIFIED", html)
+        self.assertIn("NEEDS ON-CAR CHECK", html)
+        self.assertIn("j.caveat", html)                        # dynamic render pulls the endpoint's caveat
+        self.assertIn("j.source", html)                        # ...and its SOURCE provenance
+        self.assertIn("module_confidence", html)               # per-feature confidence is rendered
+
+    def test_index_page_wires_asbuilt_lookup_decoder_section(self):
+        # Iter 139: the served page must expose a block-line decoder (paste a
+        # block_line + optional full line value, fetch /api/asbuilt-lookup, render the
+        # result) -- structural pins for the input fields, the fetch wiring, and that
+        # the render path pulls the checksum verdict + matched option + the SAME
+        # honesty fields (caveat/source/module_confidence) as the catalog browser, so
+        # every render path (including no-match/INVALID) stays UNVERIFIED-labeled.
+        _s, raw = self._req("GET", "/")
+        html = raw.decode()
+        self.assertIn("/api/asbuilt-lookup", html)             # the fetch call is wired
+        self.assertIn("id=\"asbuiltLookupBlockLine\"", html)   # block-line text input
+        self.assertIn("id=\"asbuiltLookupLine\"", html)        # optional full-line value input
+        self.assertIn("showAsBuiltLookup(", html)               # the button handler exists
+        self.assertIn("checksum", html)                         # checksum verdict is rendered
+        self.assertIn("matched_option", html)                   # matched option is rendered
+
     def test_ports_endpoint(self):
         _s, j = self._json("GET", "/api/ports")
         self.assertIn(DEMO_PORT, j["ports"])
+
+    def test_asbuilt_features_endpoint_works_with_no_connection(self):
+        # Reference/display-only data: the whole point is it works with NO vehicle
+        # connected, unlike every other /api/* endpoint above. No /api/connect call here.
+        status, j = self._json("GET", "/api/asbuilt-features")
+        self.assertEqual(status, 200)
+        self.assertTrue(j["features"])
+        row = j["features"][0]
+        self.assertIn("module_confidence", row)
+        self.assertFalse(row["verified"])  # community data must never read verified=True
+
+    def test_asbuilt_features_endpoint_carries_honesty_caveat_and_source(self):
+        # The JSON itself (not just the HTML) must carry the honesty header text and
+        # the real SOURCE provenance string -- straight from the Python constant, so
+        # the two can never drift apart.
+        from fordscope.ford.fusion_2016_asbuilt import SOURCE
+        status, j = self._json("GET", "/api/asbuilt-features")
+        self.assertEqual(status, 200)
+        self.assertEqual(j["source"], SOURCE)
+        self.assertIn("UNVERIFIED", j["caveat"])
+        self.assertIn("NEEDS ON-CAR CHECK", j["caveat"])
+
+    def test_asbuilt_features_endpoint_carries_caveat_even_on_no_match(self):
+        # Honesty must survive an empty result -- an empty list must not silently
+        # drop the caveat/source (that would be indistinguishable from "verified,
+        # nothing found" instead of "unverified catalog, no match").
+        from fordscope.ford.fusion_2016_asbuilt import SOURCE
+        status, j = self._json("GET", "/api/asbuilt-features?search=nonexistent_feature_zzz")
+        self.assertEqual(status, 200)
+        self.assertEqual(j["features"], [])
+        self.assertEqual(j["source"], SOURCE)
+        self.assertIn("UNVERIFIED", j["caveat"])
+
+    def test_asbuilt_features_endpoint_module_filter(self):
+        # Hand-derived (matches the controller-level test): exactly 4 entries at IPC/0x720.
+        status, j = self._json("GET", "/api/asbuilt-features?module=IPC")
+        self.assertEqual(status, 200)
+        self.assertEqual(len(j["features"]), 4)
+        for row in j["features"]:
+            self.assertEqual(row["module"], "IPC")
+            self.assertEqual(row["module_addr"], 0x720)
+
+    def test_asbuilt_features_endpoint_search_filter(self):
+        status, j = self._json("GET", "/api/asbuilt-features?search=honk")
+        self.assertEqual(status, 200)
+        keys = {r["key"] for r in j["features"]}
+        self.assertEqual(keys, {"door_close_double_honk", "lock_honk_2x_fob"})
+
+    def test_asbuilt_features_endpoint_no_match_returns_empty_list_not_error(self):
+        status, j = self._json("GET", "/api/asbuilt-features?search=nonexistent_feature_zzz")
+        self.assertEqual(status, 200)
+        self.assertEqual(j["features"], [])
+
+    def test_asbuilt_features_endpoint_blank_params_return_full_catalog(self):
+        # Blank/empty query params must degrade to "no filter", not a crash or a 400.
+        status, j = self._json("GET", "/api/asbuilt-features?module=&search=")
+        self.assertEqual(status, 200)
+        full_count = len(FordScopeController().asbuilt_features())
+        self.assertEqual(len(j["features"]), full_count)
+
+    def test_asbuilt_lookup_endpoint_works_with_no_connection(self):
+        # Reference/checksum-math only -- must work with NO vehicle connected, like
+        # /api/asbuilt-features. No /api/connect call here.
+        status, j = self._json("GET", "/api/asbuilt-lookup?block_line=726-17-01")
+        self.assertEqual(status, 200)
+        self.assertEqual(len(j["features"]), 1)
+        self.assertEqual(j["features"][0]["key"], "global_windows_close")
+        self.assertIsNone(j["checksum"])
+
+    def test_asbuilt_lookup_endpoint_carries_honesty_caveat_and_source(self):
+        from fordscope.ford.fusion_2016_asbuilt import SOURCE
+        status, j = self._json("GET", "/api/asbuilt-lookup?block_line=726-17-01")
+        self.assertEqual(status, 200)
+        self.assertEqual(j["source"], SOURCE)
+        self.assertIn("UNVERIFIED", j["caveat"])
+        self.assertIn("NEEDS ON-CAR CHECK", j["caveat"])
+
+    def test_asbuilt_lookup_endpoint_carries_caveat_even_on_unknown_block_line(self):
+        # Honesty must survive an empty result -- an unknown block_line must not
+        # silently drop the caveat/source.
+        from fordscope.ford.fusion_2016_asbuilt import SOURCE
+        status, j = self._json("GET", "/api/asbuilt-lookup?block_line=999-99-99")
+        self.assertEqual(status, 200)
+        self.assertEqual(j["features"], [])
+        self.assertEqual(j["source"], SOURCE)
+        self.assertIn("UNVERIFIED", j["caveat"])
+
+    def test_asbuilt_lookup_endpoint_missing_block_line_param_returns_clean_empty_200(self):
+        # Missing/blank block_line must be a clean 200 with an empty feature list --
+        # never a 500 -- while still carrying the caveat.
+        status, j = self._json("GET", "/api/asbuilt-lookup")
+        self.assertEqual(status, 200)
+        self.assertEqual(j["features"], [])
+        self.assertIn("UNVERIFIED", j["caveat"])
+
+    def test_asbuilt_lookup_endpoint_with_line_reports_valid_checksum_and_match(self):
+        # Same hand-derived fixture as the controller test: 726-17-01 + 01010101014A ->
+        # VALID (expected==actual==0x4A), matches "enabled (default)".
+        status, j = self._json(
+            "GET", "/api/asbuilt-lookup?block_line=726-17-01&line=01010101014A"
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(j["checksum"]["valid"])
+        self.assertEqual(j["checksum"]["expected"], 0x4A)
+        self.assertEqual(j["checksum"]["actual"], 0x4A)
+        self.assertEqual(j["features"][0]["matched_option"], "enabled (default)")
+        self.assertIn("UNVERIFIED", j["caveat"])
+
+    def test_asbuilt_lookup_endpoint_with_line_wrong_checksum_reports_invalid(self):
+        status, j = self._json(
+            "GET", "/api/asbuilt-lookup?block_line=726-17-01&line=02010101014A"
+        )
+        self.assertEqual(status, 200)
+        self.assertFalse(j["checksum"]["valid"])
+        self.assertEqual(j["checksum"]["expected"], 0x4B)
+        self.assertIsNone(j["features"][0]["matched_option"])
+
+    def test_asbuilt_lookup_endpoint_bad_hex_line_returns_400_not_500(self):
+        status, j = self._json(
+            "GET", "/api/asbuilt-lookup?block_line=726-17-01&line=01Z"
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("error", j)
 
     def test_connect_with_profile_via_endpoint(self):
         self._json("POST", "/api/connect", {"port": DEMO_PORT, "profile": "fusion2016"})

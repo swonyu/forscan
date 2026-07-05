@@ -28,10 +28,36 @@ attached**. Real hardware plugs in behind the same `Transport` interface.
 - **As-Built coding:** read/decode Ford As-Built blocks, set named features — with
   **un-bypassable backup-before-write, atomic durable backups, read-back verification, and
   one-click restore.**
+- **Community As-Built catalog browser:** `asbuilt-features` (CLI) and an **As-Built catalog**
+  section in the web app list the 2016 Fusion S reference catalog (28 features across 10
+  modules, filterable by module/search, `GET /api/asbuilt-features`) — **COMMUNITY-SOURCED,
+  UNVERIFIED, reference/display only**, not wired to any live read/write; the web view shows
+  the caveat, SOURCE provenance, and each feature's `module_confidence` alongside it.
+- **As-Built line checksum tool:** `asbuilt-checksum <block-line> <hex>` computes the Ford
+  As-Built per-line additive checksum (spec-verified algorithm), and `--verify` checks a full
+  line value (data + trailing checksum byte) and reports VALID/INVALID plus the expected byte.
+  Pure/offline, no vehicle needed — always prints that it checks the LINE checksum only, not
+  whether the values are correct for the vehicle (`NEEDS ON-CAR CHECK`).
+- **As-Built line decoder / reverse-lookup:** `asbuilt-lookup <block-line> [--line <hex>]` (CLI)
+  and a **Decode As-Built line** section in the web app (`GET /api/asbuilt-lookup?block_line=…
+  &line=…`) — the inverse of `asbuilt-features`: paste a block-line label seen in FORScan and see
+  which catalog feature (if any) lives there, or nothing recorded (a clean reference-only message,
+  not an error). With a full line hex value it also checksum-verifies the value and, for
+  `full_line`-kind features, reports an EXACT match against a known community option (never a
+  substring guess); for `nibble`/`byte`-kind features it deliberately does **not** guess which
+  option a partial value encodes. Pure/offline, no vehicle needed on either surface; every output
+  carries the UNVERIFIED/SOURCE/`module_confidence` caveat and the same `NEEDS ON-CAR CHECK`
+  framing as the checksum tool — a VALID checksum means only the trailing byte is self-consistent,
+  never that the value is correct for the vehicle.
 - **Live-data logging:** poll PIDs to timestamped CSV.
 - **2016 Ford Fusion S profile:** the **confirmed-tier** module addresses (`--profile fusion2016`).
   The underlying data grades modules `confirmed` / `confirm-on-vehicle` / `plausible`; the profile
   uses only the corroborated `confirmed` tier. Presence of any module is still `NEEDS ON-CAR CHECK`.
+- **`preflight` checklist:** first-on-car-session plan printed straight from
+  `ford/fusion_2016.py` (so it can't drift from the code) — every module with its real
+  confidence tag, the backup-before-write / wired-for-BCM safety gates, and the never-build
+  boundary. Static/no-vehicle tier; pairs with the full runbook in
+  [`docs/ON_CAR_VERIFICATION.md`](docs/ON_CAR_VERIFICATION.md). Asserts nothing verified.
 
 ## Quick start
 
@@ -44,9 +70,11 @@ PYTHONPATH=src python3 -m fordscope log --pids 0C,05,0D --samples 5   # log to C
 PYTHONPATH=src python3 -m fordscope features        # list As-Built features (EXAMPLE/UNVERIFIED)
 ```
 
-Commands: `scan`, `dtc`, `read <pid>`, `vin`, `clear-dtc`, `ports`, `features`, `read-feature`,
-`set-feature`, `restore-feature`, `log`. Global options: `--backend {simulator,slcan,elm327}`,
-`--port`, `--profile {generic,fusion2016}`, `--backup-file`.
+Commands: `scan`, `dtc`, `read <pid>`, `vin`, `clear-dtc`, `ports`, `features`, `preflight`,
+`asbuilt-features [--module M] [--search S]`, `asbuilt-checksum <block-line> <hex> [--verify]`,
+`asbuilt-lookup <block-line> [--line <hex>]`, `read-feature`, `set-feature`, `restore-feature`,
+`log`. Global options: `--backend {simulator,slcan,elm327}`, `--port`,
+`--profile {generic,fusion2016}`, `--backup-file`.
 
 ### The Mac app (browser UI)
 ```bash

@@ -28,6 +28,13 @@ from .ford import (
     FileBackupStore,
     FeatureCoder,
     EXAMPLE_FEATURES,
+    FUSION_2016_ASBUILT,
+    format_catalog,
+    additive_checksum,
+    parse_hex_bytes,
+    verify_full_line,
+    features_at_block_line,
+    format_block_line_lookup,
 )
 from .services import (
     scan_vehicle,
@@ -42,6 +49,68 @@ BANNER = "-- SIMULATED VEHICLE (no hardware attached) --"
 LIVE_BANNER = "-- LIVE VEHICLE via {backend} :: UNVALIDATED backend (NEEDS ON-CAR CHECK) --"
 DEMO_VIN = "1FMHK8D89ABA12345"
 _OBD_MODES = set(range(0x01, 0x0B))
+
+
+def format_preflight_checklist() -> str:
+    """The first-on-car-session checklist, DERIVED FROM CODE so it can't silently drift
+    from ``fusion_2016.FUSION_2016_MODULES``: every module the code currently knows about,
+    each with its real confidence tag, plus the safety gates and boundaries that apply to
+    ANY on-car session. Static/no-vehicle tier -- pure string formatting, no I/O.
+
+    HONESTY: this is a PLAN. Nothing printed here has been confirmed on a vehicle; every
+    module's presence and every As-Built value is `NEEDS ON-CAR CHECK` until read on the
+    owner's actual 2016 Fusion S with the Vgate vLinker FS.
+    """
+    lines = [
+        "FordScope preflight checklist -- FIRST ON-CAR SESSION PLAN (nothing verified yet)",
+        "=" * 78,
+        f"Vehicle scope: {fusion_2016.SCOPE}",
+        "",
+        "-- Module list (from ford/fusion_2016.py; this output cannot drift from the code) --",
+    ]
+    by_confidence = {"confirmed": [], "confirm-on-vehicle": [], "plausible": []}
+    for m in fusion_2016.FUSION_2016_MODULES:
+        by_confidence.setdefault(m.confidence, []).append(m)
+    labels = {
+        "confirmed": "CONFIRMED (adversarially-verified address; scan first to confirm PRESENCE)",
+        "confirm-on-vehicle": "CONFIRM-ON-VEHICLE (address known; presence on this build unverified)",
+        "plausible": "PLAUSIBLE (address plausible; presence unverified -- promote or mark ABSENT)",
+    }
+    for tag in ("confirmed", "confirm-on-vehicle", "plausible"):
+        entries = by_confidence.get(tag, [])
+        if not entries:
+            continue
+        lines.append(f"  [{tag}] {labels[tag]}")
+        for m in entries:
+            addr = f"0x{m.address:03X}"
+            note = f" -- {m.note}" if m.note else ""
+            lines.append(f"    {m.name:6s} {addr}  confidence={tag}{note}")
+    lines += [
+        "",
+        "Goal for this session: PROMOTE each plausible/confirm-on-vehicle module to",
+        "confirmed (it answered) or mark it ABSENT (silence) -- this retires the",
+        "\"plausible\" tags honestly instead of leaving them stale.",
+        "",
+        "-- Safety gates (apply to ANY on-car session) --",
+        "  * BACKUP-BEFORE-WRITE: never write an As-Built block without a captured backup",
+        "    and a read-back verify AFTER the write. No exceptions.",
+        "  * WIRED CONNECTION for BdyCM/BCM (central-config) writes: a dropped BLE link",
+        "    mid-write can reboot the module in a bad state. Use a wired OBD connection",
+        "    for any BCM/central-config write, not the vLinker FS's wireless mode.",
+        "  * macOS is BLE-only for wireless OBD (no Bluetooth-Classic SPP) -- confirm the",
+        "    connection mode before relying on it for anything beyond a read.",
+        "",
+        "-- Never-build boundary (hard stop, no exceptions) --",
+        "  * NEVER emissions-defeat coding (readiness spoof, EGR/DPF delete).",
+        "  * NEVER anti-theft / immobilizer (PATS) bypass.",
+        "  * NEVER reflash that cracks SecurityAccess or ships OEM calibrations.",
+        "",
+        "NEEDS ON-CAR CHECK: every module's presence, every As-Built read value, and every",
+        "community catalog block/line mapping in this checklist is UNVERIFIED until",
+        "confirmed on the owner's actual vehicle. This checklist is a PLAN, not a result.",
+        "See docs/ON_CAR_VERIFICATION.md for the full phased runbook.",
+    ]
+    return "\n".join(lines)
 
 
 def _combined(obd_ecu, uds_ecu):
@@ -264,6 +333,50 @@ def _build_parser() -> argparse.ArgumentParser:
     sub.add_parser("clear-dtc", help="clear stored DTCs")
     sub.add_parser("ports", help="list connected serial adapters (for --port)")
     sub.add_parser("features", help="list built-in As-Built features (EXAMPLE/UNVERIFIED)")
+    sub.add_parser(
+        "preflight",
+        help="first-on-car-session checklist derived from code (modules + safety gates + "
+        "never-build boundary; no vehicle needed, asserts nothing verified)",
+    )
+    abf = sub.add_parser(
+        "asbuilt-features",
+        help="browse the community As-Built reference catalog (COMMUNITY-SOURCED/UNVERIFIED; "
+        "reference only, no live read/write)",
+    )
+    abf.add_argument(
+        "--module", default=None,
+        help="filter by module name (e.g. BCM, IPC) or numeric/hex address (e.g. 0x726)",
+    )
+    abf.add_argument(
+        "--search", default=None,
+        help="case-insensitive substring search over feature name and key (e.g. honk)",
+    )
+    ack = sub.add_parser(
+        "asbuilt-checksum",
+        help="compute/verify an As-Built LINE checksum (pure; no vehicle needed)",
+    )
+    ack.add_argument("block_line", help="block label, e.g. 726-17-01")
+    ack.add_argument(
+        "hex_value",
+        help="data hex bytes to checksum (e.g. '0101010101' or '01 01 01 01 01'), or, "
+        "with --verify, the FULL line hex incl. the trailing checksum byte",
+    )
+    ack.add_argument(
+        "--verify", action="store_true",
+        help="treat hex_value as a full line (data + trailing checksum byte) and report "
+        "VALID/INVALID against the recomputed checksum",
+    )
+    alk = sub.add_parser(
+        "asbuilt-lookup",
+        help="reverse-lookup: what catalog feature lives at a block-line (pure; no "
+        "vehicle needed) -- the inverse of asbuilt-features",
+    )
+    alk.add_argument("block_line", help="block label as seen in FORScan, e.g. 726-17-01")
+    alk.add_argument(
+        "--line", default=None, dest="full_line_hex",
+        help="full line hex incl. trailing checksum byte (e.g. '01010101014A') to also "
+        "check the checksum and match it against known community option values",
+    )
     rf = sub.add_parser("read-feature", help="read a feature's current setting")
     rf.add_argument("key", help="feature key, e.g. fog_drl")
     sf = sub.add_parser("set-feature", help="set a feature (simulator only; needs --confirm)")
@@ -288,7 +401,7 @@ def main(argv: Optional[List[str]] = None, *, port_factory=None) -> int:
         parser.print_help()
         return 1
 
-    # 'ports' and 'features' are static listings — no vehicle needed.
+    # 'ports', 'features', and 'asbuilt-features' are static listings — no vehicle needed.
     if args.command == "ports":
         ports = list_serial_ports()
         if ports:
@@ -301,6 +414,72 @@ def main(argv: Optional[List[str]] = None, *, port_factory=None) -> int:
         return 0
     if args.command == "features":
         print_features()
+        return 0
+    if args.command == "preflight":
+        print(format_preflight_checklist())
+        return 0
+    if args.command == "asbuilt-features":
+        print(format_catalog(FUSION_2016_ASBUILT, module=args.module, search=args.search))
+        return 0
+    if args.command == "asbuilt-checksum":
+        try:
+            if args.verify:
+                result = verify_full_line(args.block_line, args.hex_value)
+                verdict = "VALID" if result.valid else "INVALID"
+                print(f"{args.block_line}  {args.hex_value.strip()}  -> {verdict}")
+                print(f"  stored checksum byte: {result.actual_checksum:02X}")
+                print(f"  expected checksum byte: {result.expected_checksum:02X}")
+            else:
+                data = parse_hex_bytes(args.hex_value)
+                checksum = additive_checksum(args.block_line, data)
+                print(f"{args.block_line}  {args.hex_value.strip()}  -> checksum {checksum:02X}")
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        print("  ! This computes the LINE checksum only -- it does NOT verify the values "
+              "are correct for the vehicle (NEEDS ON-CAR CHECK).")
+        return 0
+    if args.command == "asbuilt-lookup":
+        features = features_at_block_line(args.block_line, FUSION_2016_ASBUILT)
+        print(format_block_line_lookup(args.block_line, features))
+        if args.full_line_hex is not None:
+            try:
+                result = verify_full_line(args.block_line, args.full_line_hex)
+            except ValueError as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 2
+            verdict = "VALID" if result.valid else "INVALID"
+            print(f"Line value: {args.full_line_hex.strip()}  -> checksum {verdict}")
+            print(f"  stored checksum byte: {result.actual_checksum:02X}")
+            print(f"  expected checksum byte: {result.expected_checksum:02X}")
+            # Match against known community option values -- but ONLY for a full_line-kind
+            # feature: a full_line option is the whole 6-byte value, so an exact string
+            # comparison is meaningful. For nibble/byte-kind features the catalog only
+            # records the CHANGED field, not the surrounding bytes, so which option a
+            # partial value encodes cannot be determined from a full-line paste without
+            # fabricating a decode -- say so honestly instead of guessing.
+            full_line_features = [f for f in features if f.kind == "full_line"]
+            given_norm = parse_hex_bytes(args.full_line_hex).hex().upper()
+            for f in full_line_features:
+                match = next(
+                    (meaning for value, meaning in f.options
+                     if value.upper() == given_norm),
+                    None,
+                )
+                if match is not None:
+                    print(f"  {f.name}: matches: {match}")
+                else:
+                    print(f"  {f.name}: value is not a recognized community option "
+                          f"(known options: {', '.join(v for v, _ in f.options)})")
+            partial_features = [f for f in features if f.kind in ("nibble", "byte")]
+            for f in partial_features:
+                print(f"  {f.name}: bits={f.bits} — per-nibble/byte decoding of a partial "
+                      f"value is not attempted (would require guessing the unchanged "
+                      f"surrounding bytes); options: "
+                      f"{', '.join(v + '=' + m for v, m in f.options)}")
+            print("  ! Checksum VALID means only that the trailing byte is self-consistent "
+                  "with this label+data -- it does NOT mean the value is correct for the "
+                  "vehicle (NEEDS ON-CAR CHECK).")
         return 0
 
     try:

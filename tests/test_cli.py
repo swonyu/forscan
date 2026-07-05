@@ -153,6 +153,269 @@ class CliTests(unittest.TestCase):
         self.assertIn("gauge_sweep", out)
         self.assertIn("UNVERIFIED", out)
 
+    def test_asbuilt_features_lists_the_community_catalog_with_honesty_caveat(self):
+        # No hardware needed -- this is the community reference catalog, static data.
+        code, out, _ = run("asbuilt-features")
+        self.assertEqual(code, 0)
+        self.assertIn("UNVERIFIED", out)
+        self.assertIn("NEEDS ON-CAR CHECK", out)
+        self.assertIn("2GFusions", out)          # SOURCE provenance
+        self.assertIn("726-41-02", out)          # a known feature's block_line
+
+    def test_asbuilt_features_module_filter_returns_only_ipc_entries(self):
+        code, out, _ = run("asbuilt-features", "--module", "IPC")
+        self.assertEqual(code, 0)
+        self.assertIn("720-01-01", out)      # awd_gauge (IPC) -- present
+        self.assertNotIn("726-41-02", out)   # a BCM-only block_line must be excluded
+
+    def test_asbuilt_features_search_matches_honk_features_only(self):
+        code, out, _ = run("asbuilt-features", "--search", "honk")
+        self.assertEqual(code, 0)
+        self.assertIn("726-41-02", out)   # door_close_double_honk
+        self.assertIn("726-38-02", out)   # lock_honk_2x_fob
+        self.assertNotIn("720-01-01", out)  # awd_gauge must be excluded (unrelated)
+
+    def test_asbuilt_features_no_match_prints_clean_message_not_a_crash(self):
+        code, out, _ = run("asbuilt-features", "--search", "nonexistent_feature_zzz")
+        self.assertEqual(code, 0)
+        self.assertIn("no match", out.lower())
+        # Even an empty result must still show the honesty caveat.
+        self.assertIn("UNVERIFIED", out)
+
+    def test_asbuilt_checksum_computes_the_documented_example(self):
+        # 760-01-04 3733 -> D6 is the spec's own worked example (hand-derived, not read
+        # off the implementation -- see test_fusion_2016_asbuilt.py).
+        code, out, _ = run("asbuilt-checksum", "760-01-04", "3733")
+        self.assertEqual(code, 0)
+        self.assertIn("D6", out.upper())
+        # The tool must never imply a checksummed line is safe to write to a car.
+        self.assertIn("NEEDS ON-CAR CHECK", out)
+
+    def test_asbuilt_checksum_accepts_spaced_hex(self):
+        code, out, _ = run("asbuilt-checksum", "726-17-01", "01 01 01 01 01")
+        self.assertEqual(code, 0)
+        self.assertIn("4A", out.upper())
+
+    def test_asbuilt_checksum_verify_valid_full_line(self):
+        code, out, _ = run("asbuilt-checksum", "--verify", "726-17-01", "01010101014A")
+        self.assertEqual(code, 0)
+        self.assertIn("VALID", out.upper())
+        self.assertNotIn("INVALID", out.upper())
+        self.assertIn("NEEDS ON-CAR CHECK", out)
+
+    def test_asbuilt_checksum_verify_invalid_full_line_reports_expected_byte(self):
+        # Flip one data byte (01->02) but keep the original trailing checksum (4A);
+        # hand-derived expected checksum for the flipped line is 4B (see
+        # test_fusion_2016_asbuilt.VerifyFullLineTests).
+        code, out, _ = run("asbuilt-checksum", "--verify", "726-17-01", "02010101014A")
+        self.assertEqual(code, 0)
+        self.assertIn("INVALID", out.upper())
+        self.assertIn("4B", out.upper())  # the expected byte must be surfaced
+
+    def test_preflight_runs_with_no_vehicle_connection(self):
+        # Static/no-vehicle tier, like features/asbuilt-features: no --backend/--port
+        # needed, and it must succeed even though no simulator or serial port is involved
+        # in reaching this code path (dispatched before open_backend, same as the other
+        # static commands).
+        code, out, _ = run("preflight")
+        self.assertEqual(code, 0)
+        self.assertTrue(out.strip())
+
+    def test_preflight_lists_every_confirmed_module_by_name(self):
+        # Hand-derived from reading ford/fusion_2016.py directly (not from running the
+        # code under test): the six adversarially-verified CONFIRMED modules.
+        code, out, _ = run("preflight")
+        self.assertEqual(code, 0)
+        for name in ("PCM", "ABS", "RCM", "APIM", "IPC", "BCM"):
+            with self.subTest(module=name):
+                self.assertIn(name, out)
+
+    def test_preflight_tags_confirmed_modules_with_confirmed_confidence(self):
+        # The word "confirmed" must appear attached to this run's output at all (i.e. the
+        # confidence tagging is actually rendered, not just the bare module names).
+        code, out, _ = run("preflight")
+        self.assertEqual(code, 0)
+        self.assertIn("confirmed", out)
+
+    def test_preflight_lists_plausible_modules_with_plausible_tag(self):
+        # Hand-derived from fusion_2016.py: the ten "plausible" entries include DDM, PDM,
+        # ACM, SCCM, FCIM, HSWM, FCDIM, PAM, OCS, PSCM. Spot-check the ones the task names
+        # explicitly plus confirm the confidence word itself is rendered.
+        code, out, _ = run("preflight")
+        self.assertEqual(code, 0)
+        for name in ("DDM", "PDM", "ACM", "SCCM", "FCIM", "HSWM", "FCDIM"):
+            with self.subTest(module=name):
+                self.assertIn(name, out)
+        self.assertIn("plausible", out)
+
+    def test_preflight_notes_hswm_and_acm_likely_absent_on_base_s(self):
+        # These two carry an explicit "likely ABSENT on base S" style note in
+        # fusion_2016.py itself (HSWM: heated-steering-wheel module; ACM: premium/Sony
+        # audio) -- the preflight checklist must surface that per-module note text, not
+        # just the bare name, so the owner isn't surprised when they don't answer.
+        code, out, _ = run("preflight")
+        self.assertEqual(code, 0)
+        self.assertIn("likely ABSENT on base S", out)
+
+    def test_preflight_contains_backup_before_write_reminder(self):
+        code, out, _ = run("preflight")
+        self.assertEqual(code, 0)
+        self.assertIn("backup", out.lower())
+        self.assertIn("before", out.lower())
+        self.assertIn("write", out.lower())
+
+    def test_preflight_contains_wired_connection_reminder_for_bdycm_writes(self):
+        # Central-config / BdyCM (BCM) writes can reboot the module mid-write -- the
+        # runbook's Phase-0 safety gate. Must be plain enough to catch a skim-reader.
+        code, out, _ = run("preflight")
+        self.assertEqual(code, 0)
+        self.assertIn("wired", out.lower())
+
+    def test_preflight_contains_a_never_build_boundary_line(self):
+        code, out, _ = run("preflight")
+        self.assertEqual(code, 0)
+        lowered = out.lower()
+        # At least one of the three hard boundaries must be named explicitly, not just
+        # implied -- pick the least ambiguous keyword from each.
+        self.assertTrue(
+            any(term in lowered for term in ("emissions", "immobilizer", "pats", "securityaccess"))
+        )
+        self.assertIn("never", lowered)
+
+    def test_preflight_contains_needs_on_car_check_framing(self):
+        code, out, _ = run("preflight")
+        self.assertEqual(code, 0)
+        self.assertIn("NEEDS ON-CAR CHECK", out)
+
+    def test_preflight_module_list_matches_fusion_2016_drift_guard(self):
+        # Drift guard: every module NAME in FUSION_2016_MODULES must appear in the
+        # preflight output, so the runbook/CLI checklist cannot silently fall out of sync
+        # with the code if a module is added/removed/renamed later.
+        code, out, _ = run("preflight")
+        self.assertEqual(code, 0)
+        for m in fusion_2016.FUSION_2016_MODULES:
+            with self.subTest(module=m.name):
+                self.assertIn(m.name, out)
+
+    def test_asbuilt_checksum_bad_hex_is_a_clean_error_not_a_crash(self):
+        code, out, err = run("asbuilt-checksum", "726-17-01", "01Z")
+        self.assertNotEqual(code, 0)
+        self.assertIn("error", err.lower())
+
+    def test_asbuilt_checksum_no_vehicle_needed(self):
+        # Static computation -- must not require --backend/--port at all.
+        code, out, _ = run("asbuilt-checksum", "760-01-04", "3733")
+        self.assertEqual(code, 0)
+        self.assertNotIn("SIMULATED VEHICLE", out)
+
+    def test_asbuilt_lookup_known_block_line_lists_its_feature(self):
+        # Hand-derived: 726-17-01 is global_windows_close's block_line (see
+        # test_fusion_2016_asbuilt.py). No --line given -- just the catalog listing.
+        code, out, _ = run("asbuilt-lookup", "726-17-01")
+        self.assertEqual(code, 0)
+        self.assertIn("Global windows remote close", out)
+        self.assertIn("BCM", out)
+        self.assertIn("UNVERIFIED", out)
+        self.assertIn("NEEDS ON-CAR CHECK", out)
+
+    def test_asbuilt_lookup_is_case_and_space_insensitive(self):
+        # 7D0-01-01 is reverse_camera's block_line (APIM) -- has hex letters to case-fold.
+        code, out, _ = run("asbuilt-lookup", "  7d0-01-01  ")
+        self.assertEqual(code, 0)
+        self.assertIn("reverse camera", out.lower())
+
+    def test_asbuilt_lookup_unknown_block_line_prints_clean_reference_only_message(self):
+        code, out, _ = run("asbuilt-lookup", "999-99-99")
+        self.assertEqual(code, 0)
+        self.assertIn("no catalog feature recorded", out.lower())
+        self.assertIn("reference only", out.lower())
+        # Even the no-match case must still carry the honesty header.
+        self.assertIn("UNVERIFIED", out)
+        self.assertIn("NEEDS ON-CAR CHECK", out)
+
+    def test_asbuilt_lookup_no_vehicle_needed(self):
+        code, out, _ = run("asbuilt-lookup", "726-17-01")
+        self.assertEqual(code, 0)
+        self.assertNotIn("SIMULATED VEHICLE", out)
+
+    def test_asbuilt_lookup_whitespace_only_block_line_is_clean_not_a_crash(self):
+        # Adversarial: an empty/whitespace-only argument must degrade to the same clean
+        # no-match message as an unknown block, never a traceback or a 500-style failure.
+        code, out, _ = run("asbuilt-lookup", "   ")
+        self.assertEqual(code, 0)
+        self.assertIn("no catalog feature recorded", out.lower())
+        self.assertIn("UNVERIFIED", out)
+
+    def test_asbuilt_lookup_option_match_is_exact_not_substring(self):
+        # Adversarial: a value that CONTAINS a known option as a substring, or is a
+        # case-different near-miss with extra characters, must NOT be reported as a
+        # match -- only an exact (case-insensitive) full-hex match counts. Pad the known
+        # "enabled (default)" value 01010101014A with a leading byte so it's no longer a
+        # valid full-line value ​for THIS block (wrong length) but embeds the exact known
+        # option hex as a substring of the raw text.
+        code, out, err = run(
+            "asbuilt-lookup", "726-17-01", "--line", "FF01010101014A",
+        )
+        # Either a clean parse error (odd/implausible length rejected upstream) or, if it
+        # parses, it must NOT claim a match against global_windows_close's options --
+        # a substring-matching bug would wrongly report "matches: enabled (default)".
+        if code == 0:
+            self.assertNotIn("matches: enabled (default)", out)
+
+    def test_asbuilt_lookup_with_line_reports_valid_checksum_and_matched_option(self):
+        # 726-17-01 + 01010101014A: hand-derived VALID (checksum label 0x45 + data 5 =
+        # 0x4A, matching trailing byte -- see test_fusion_2016_asbuilt.py), and this exact
+        # hex string IS global_windows_close's "enabled (default)" option value.
+        code, out, _ = run("asbuilt-lookup", "726-17-01", "--line", "01010101014A")
+        self.assertEqual(code, 0)
+        self.assertIn("VALID", out.upper())
+        self.assertNotIn("INVALID", out.upper())
+        self.assertIn("4A", out.upper())
+        self.assertIn("matches", out.lower())
+        self.assertIn("enabled (default)", out)
+        self.assertIn("NEEDS ON-CAR CHECK", out)
+
+    def test_asbuilt_lookup_with_line_matches_the_disabled_option(self):
+        # Hand-derived: label 0x45 + data (00*4=0) = 0x45, matching trailing byte 45 ->
+        # VALID; 000000000045 is global_windows_close's "disabled" option value.
+        code, out, _ = run("asbuilt-lookup", "726-17-01", "--line", "000000000045")
+        self.assertEqual(code, 0)
+        self.assertIn("VALID", out.upper())
+        self.assertIn("matches", out.lower())
+        self.assertIn("disabled", out.lower())
+
+    def test_asbuilt_lookup_with_line_wrong_checksum_reports_invalid_and_expected_byte(self):
+        # Flip 01->02 in the first data byte but keep the original checksum byte (4A);
+        # hand-derived expected is 4B (same fixture as test_asbuilt_checksum_verify_*).
+        code, out, _ = run("asbuilt-lookup", "726-17-01", "--line", "02010101014A")
+        self.assertEqual(code, 0)
+        self.assertIn("INVALID", out.upper())
+        self.assertIn("4B", out.upper())
+
+    def test_asbuilt_lookup_with_line_value_not_a_recognized_option(self):
+        # Same flipped-byte line as above: checksum is INVALID AND the raw hex string
+        # ("02010101014A") is not any of global_windows_close's option values either --
+        # both facts must be reported, distinctly.
+        code, out, _ = run("asbuilt-lookup", "726-17-01", "--line", "02010101014A")
+        self.assertEqual(code, 0)
+        self.assertIn("not a recognized", out.lower())
+
+    def test_asbuilt_lookup_with_line_on_nibble_kind_does_not_guess_the_nibble(self):
+        # 726-41-02 is door_close_double_honk, kind="nibble", bits "xxxX xxxx xxxx" --
+        # a partial-value feature. The tool must show the checksum result and the bits
+        # mask but explicitly refuse to guess which specific option the nibble encodes.
+        code, out, _ = run("asbuilt-lookup", "726-41-02", "--line", "010101010149")
+        self.assertEqual(code, 0)
+        self.assertIn("xxxX xxxx xxxx", out)
+        self.assertIn("not attempted", out.lower())
+        # Must NOT fabricate a specific matched option for a nibble-kind feature.
+        self.assertNotIn("matches: enabled", out)
+
+    def test_asbuilt_lookup_with_line_bad_hex_is_a_clean_error_not_a_crash(self):
+        code, out, err = run("asbuilt-lookup", "726-17-01", "--line", "01Z")
+        self.assertNotEqual(code, 0)
+        self.assertIn("error", err.lower())
+
     def test_read_feature_reports_off_and_warns(self):
         code, out, _ = run("read-feature", "fog_drl")
         self.assertEqual(code, 0)

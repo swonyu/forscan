@@ -13,6 +13,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 from .controller import FordScopeController, list_ports, NotConnectedError
+from ..ford.fusion_2016_asbuilt import SOURCE as ASBUILT_SOURCE
+from ..ford.asbuilt_catalog_view import CATALOG_CAVEAT as ASBUILT_CAVEAT
 
 INDEX_HTML = r"""<!doctype html>
 <html><head><meta charset="utf-8"><title>FordScope</title>
@@ -68,6 +70,20 @@ INDEX_HTML = r"""<!doctype html>
   <input id="logsamples" value="10" size="4" title="samples"><button onclick="downloadLog()">Download log (CSV)</button>
 </div>
 <div id="supported" class="row"></div>
+<div class="row">
+  <input id="asbuiltModule" size="10" placeholder="module (e.g. BCM)">
+  <input id="asbuiltSearch" size="16" placeholder="search name/key">
+  <button onclick="showAsBuiltCatalog()">As-Built catalog (reference)</button>
+</div>
+<div id="asbuiltStaticCaveat" class="hint asbuilt-caveat">COMMUNITY-SOURCED · UNVERIFIED · NEEDS ON-CAR CHECK — reference only, never a live read/write. See the As-Built catalog button for the SOURCE and each feature's module_confidence.</div>
+<div id="asbuilt"></div>
+<div class="row">
+  <input id="asbuiltLookupBlockLine" size="12" placeholder="block-line (e.g. 726-17-01)">
+  <input id="asbuiltLookupLine" size="18" placeholder="full line hex (optional, e.g. 01010101014A)">
+  <button onclick="showAsBuiltLookup()">Decode As-Built line</button>
+</div>
+<div id="asbuiltLookupStaticCaveat" class="hint asbuilt-caveat">COMMUNITY-SOURCED · UNVERIFIED · NEEDS ON-CAR CHECK — reference/checksum-math only, never a live UDS read/write. A VALID checksum means only the trailing byte is self-consistent, NOT that the value is correct for the vehicle (NEEDS ON-CAR CHECK).</div>
+<div id="asbuiltLookup"></div>
 <table id="live"></table>
 <pre id="out"></pre>
 <script>
@@ -169,6 +185,77 @@ async function showSupported(){const r=await fetch('/api/supported');const j=awa
  if(j.banner)setBanner(j.banner);const d=document.getElementById('supported');
  if(j.error){d.textContent=j.error;return;}
  d.innerHTML=(j.pids||[]).map(p=>'<button title="'+(p.decodable?'add to live dashboard':'no decoder yet')+'" onclick="addLive(\''+p.hex+'\')">'+p.hex+' '+p.name+'</button>').join('');}
+function escapeHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+async function showAsBuiltCatalog(){
+ // Static community reference catalog -- works with NO vehicle connected (no banner,
+ // no connect required). Every render, including an empty/no-match result, carries
+ // the honesty header + SOURCE provenance so it can never be mistaken for verified
+ // or live data; each row shows its own module_confidence.
+ const mod=document.getElementById('asbuiltModule').value;
+ const search=document.getElementById('asbuiltSearch').value;
+ const q=new URLSearchParams();if(mod)q.set('module',mod);if(search)q.set('search',search);
+ const d=document.getElementById('asbuilt');
+ let j;
+ try{const r=await fetch('/api/asbuilt-features?'+q.toString());j=await r.json();}
+ catch(e){d.textContent='could not load the As-Built catalog';return;}
+ if(j.error){d.textContent=j.error;return;}
+ const rows=j.features||[];
+ let html='<div class="asbuilt-caveat">'+escapeHtml(j.caveat||'COMMUNITY-SOURCED · UNVERIFIED · NEEDS ON-CAR CHECK')+'</div>';
+ html+='<div class="hint">'+escapeHtml(j.source||'')+'</div>';
+ if(!rows.length){html+='<div class="hint">No matching As-Built features.</div>';}
+ else{
+  html+='<table class="asbuilt-table"><tr><th>Feature</th><th>Module</th><th>Confidence</th><th>Block/line</th><th>Options</th></tr>';
+  rows.forEach(f=>{
+   const opts=(f.options||[]).map(o=>o[0]+' = '+o[1]).join('; ');
+   html+='<tr><td>'+escapeHtml(f.name)+'</td><td>'+escapeHtml(f.module)+' (0x'+f.module_addr.toString(16).toUpperCase()+')</td>'
+       +'<td>'+escapeHtml(f.module_confidence)+'</td><td>'+escapeHtml(f.block_line)+'</td><td>'+escapeHtml(opts)+'</td></tr>';});
+  html+='</table>';
+ }
+ d.innerHTML=html;}
+async function showAsBuiltLookup(){
+ // Reference/checksum-math only -- works with NO vehicle connected (no banner, no
+ // connect required): paste a block-line label (e.g. off a FORScan screen) and
+ // optionally a full line hex value to also checksum-verify + match it against a
+ // known community option. Every render path below -- match, no-match, INVALID
+ // checksum, and the no-line-given case -- keeps the honesty caveat + SOURCE +
+ // per-feature module_confidence visible, and escapes every user-derived string
+ // into the DOM via escapeHtml so a hostile block_line/line value can never inject
+ // markup/script (matches showAsBuiltCatalog()'s XSS discipline).
+ const blockLine=document.getElementById('asbuiltLookupBlockLine').value;
+ const lineVal=document.getElementById('asbuiltLookupLine').value;
+ const d=document.getElementById('asbuiltLookup');
+ const q=new URLSearchParams();q.set('block_line',blockLine);if(lineVal)q.set('line',lineVal);
+ let j;
+ try{const r=await fetch('/api/asbuilt-lookup?'+q.toString());j=await r.json();}
+ catch(e){d.textContent='could not load the As-Built line decoder';return;}
+ if(j.error){d.textContent=j.error;return;}
+ let html='<div class="asbuilt-caveat">'+escapeHtml(j.caveat||'COMMUNITY-SOURCED · UNVERIFIED · NEEDS ON-CAR CHECK')+'</div>';
+ html+='<div class="hint">'+escapeHtml(j.source||'')+'</div>';
+ if(j.checksum){
+  const verdict=j.checksum.valid?'VALID':'INVALID';
+  html+='<div><b>Checksum: '+verdict+'</b> — stored '
+      +j.checksum.actual.toString(16).toUpperCase().padStart(2,'0')+', expected '
+      +j.checksum.expected.toString(16).toUpperCase().padStart(2,'0')+'</div>';
+  html+='<div class="hint">A VALID checksum means only the trailing byte is self-consistent with this label+data -- it does NOT mean the value is correct for the vehicle (NEEDS ON-CAR CHECK).</div>';
+ }
+ const rows=j.features||[];
+ if(!rows.length){
+  html+='<div class="hint">No catalog feature recorded at this line — reference only (absence from this community catalog is not evidence the line is unused).</div>';
+ }else{
+  html+='<table class="asbuilt-table"><tr><th>Feature</th><th>Module</th><th>Confidence</th><th>Kind</th><th>Bits</th><th>Options</th><th>Matched option</th></tr>';
+  rows.forEach(f=>{
+   const opts=(f.options||[]).map(o=>o[0]+' = '+o[1]).join('; ');
+   let matched;
+   if(f.matched_option){matched=escapeHtml(f.matched_option);}
+   else if(f.kind==='full_line' && lineVal){matched='not a recognized community option';}
+   else if(f.kind!=='full_line'){matched='not attempted (partial-value kind='+escapeHtml(f.kind)+')';}
+   else{matched='(no line value given)';}
+   html+='<tr><td>'+escapeHtml(f.name)+'</td><td>'+escapeHtml(f.module)+' (0x'+f.module_addr.toString(16).toUpperCase()+')</td>'
+       +'<td>'+escapeHtml(f.module_confidence)+'</td><td>'+escapeHtml(f.kind)+'</td><td>'+escapeHtml(f.bits)+'</td>'
+       +'<td>'+escapeHtml(opts)+'</td><td>'+matched+'</td></tr>';});
+  html+='</table>';
+ }
+ d.innerHTML=html;}
 loadPorts();
 </script></body></html>"""
 
@@ -219,6 +306,43 @@ def _make_handler(controller: FordScopeController):
                     return self._html(INDEX_HTML)
                 if u.path == "/api/ports":
                     return self._json({"ports": list_ports()})
+                if u.path == "/api/asbuilt-features":
+                    # Reference/display-only static catalog -- deliberately does NOT
+                    # need a connection (no controller.snapshot()/banner pairing; the
+                    # controller method itself never touches self.transport). Blank
+                    # query params mean "no filter" (module=None/search=None). The
+                    # honesty caveat + SOURCE ride in EVERY response, including an
+                    # empty/no-match result, so the JSON itself can never be mistaken
+                    # for verified data by any consumer (not just the bundled page).
+                    q = parse_qs(u.query)
+                    module = (q.get("module", [""])[0] or None)
+                    search = (q.get("search", [""])[0] or None)
+                    features = controller.asbuilt_features(module=module, search=search)
+                    return self._json({
+                        "features": features,
+                        "caveat": ASBUILT_CAVEAT,
+                        "source": ASBUILT_SOURCE,
+                    })
+                if u.path == "/api/asbuilt-lookup":
+                    # Reference/checksum-math only -- like /api/asbuilt-features, this
+                    # deliberately does NOT need a connection (the controller method
+                    # never touches self.transport or a live UDS DID). A missing/blank
+                    # block_line degrades to an empty feature list, not a 500 (the
+                    # underlying features_at_block_line() never raises on that). A bad
+                    # `line` hex string IS a genuine client error -- it raises ValueError,
+                    # caught by the existing outer `except ValueError -> 400` clause
+                    # below, same convention as /api/read's bad-hex PID. The honesty
+                    # caveat + SOURCE ride in EVERY response, including the empty/
+                    # no-match case, exactly like /api/asbuilt-features.
+                    q = parse_qs(u.query)
+                    block_line = q.get("block_line", [""])[0]
+                    line = q.get("line", [""])[0] or None
+                    result = controller.asbuilt_lookup(block_line, line=line)
+                    return self._json({
+                        **result,
+                        "caveat": ASBUILT_CAVEAT,
+                        "source": ASBUILT_SOURCE,
+                    })
                 if u.path == "/api/scan":
                     text, banner = controller.snapshot(controller.scan)
                     return self._json({"text": text, "banner": banner})

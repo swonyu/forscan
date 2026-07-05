@@ -45,6 +45,15 @@ FUSION_2016_MODULES: List[ModuleEntry] = [
     ModuleEntry("OCS", 0x765, "plausible", "presence unverified"),
     ModuleEntry("SCCM", 0x724, "plausible", "address confirmed, presence unverified"),
     ModuleEntry("PSCM", 0x730, "plausible", "address confirmed, presence unverified"),
+    # As-Built-reference modules (addresses from the 2GFusions/DanMc85 sheet). Presence on THIS
+    # base 2.5L S is unverified and several are trim-dependent, so all stay "plausible" — they back
+    # the community As-Built catalog (fusion_2016_asbuilt.py), NOT the confident diagnostic scan.
+    ModuleEntry("DDM", 0x740, "plausible", "Driver door module; As-Built reference addr (2GFusions)"),
+    ModuleEntry("PDM", 0x741, "plausible", "Passenger door module; As-Built reference addr (2GFusions)"),
+    ModuleEntry("ACM", 0x727, "plausible", "Audio module; premium/Sony audio likely absent on base S"),
+    ModuleEntry("FCIM", 0x7A7, "plausible", "Front Controls Interface Module; As-Built reference addr"),
+    ModuleEntry("HSWM", 0x714, "plausible", "Heated-steering-wheel module; likely ABSENT on base S"),
+    ModuleEntry("FCDIM", 0x7A5, "plausible", "Front Control Display Interface (basic Sync); As-Built ref"),
 ]
 
 

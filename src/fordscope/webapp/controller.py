@@ -22,6 +22,8 @@ from ..cli import open_backend, list_serial_ports
 from ..isotp import IsoTpSocket, IsoTpError
 from ..obd import ObdClient, ObdError, ObdNegativeResponse, PID_TABLE
 from ..obd.drive_cycle import drive_cycle_tips
+from ..ford.fusion_2016_asbuilt import FUSION_2016_ASBUILT, features_at_block_line, verify_full_line
+from ..ford.asbuilt_catalog_view import filter_features
 
 # Range-marker PIDs (0x00/0x20/…) plus status PIDs (0x01 monitor status, 0x02
 # freeze-DTC pointer) — none are live-gauge scalars, so keep them out of the picker.
@@ -108,6 +110,110 @@ class FordScopeController:
 
     def _obd(self) -> ObdClient:
         return ObdClient(IsoTpSocket(self.transport, tx_id=0x7E0, rx_id=0x7E8))
+
+    @_synchronized
+    def asbuilt_features(self, module=None, search=None) -> List[dict]:
+        """The community As-Built catalog (``fusion_2016_asbuilt.FUSION_2016_ASBUILT``),
+        optionally filtered by module (name like "BCM"/"IPC", or a numeric/hex address)
+        and/or a case-insensitive substring search over name+key.
+
+        REFERENCE/DISPLAY ONLY: this is static catalog data, not a live vehicle read — it
+        deliberately does NOT require a connection (no ``_require()``) and never touches
+        ``self.transport``. Every returned row carries its own ``module_confidence`` and
+        ``verified`` (always False for this catalog) so a caller can never present this as
+        verified without the flag being right there in the data.
+        """
+        rows = []
+        for f in filter_features(FUSION_2016_ASBUILT, module=module, search=search):
+            rows.append({
+                "key": f.key,
+                "name": f.name,
+                "module": f.module,
+                "module_addr": f.module_addr,
+                "module_confidence": f.module_confidence,
+                "block_line": f.block_line,
+                "bits": f.bits,
+                "kind": f.kind,
+                "options": list(f.options),
+                "my": f.my,
+                "verified": f.verified,
+                "note": f.note,
+            })
+        return rows
+
+    @_synchronized
+    def asbuilt_lookup(self, block_line: str, line: Optional[str] = None) -> dict:
+        """Reverse-lookup + checksum for a single As-Built block-line label, e.g.
+        "726-17-01" as read off a FORScan screen -- the web-UI equivalent of the CLI's
+        ``asbuilt-lookup`` command (reuses the exact same helpers: ``features_at_block_line``
+        + ``verify_full_line``).
+
+        REFERENCE/CHECKSUM-MATH ONLY: like ``asbuilt_features``, this deliberately does
+        NOT require a connection (no ``_require()``) and never touches ``self.transport``
+        or any live UDS DID -- it is pure catalog lookup + offline additive-checksum
+        arithmetic over user-supplied hex text.
+
+        Returns a dict:
+          - ``features``: the catalog feature(s) at ``block_line`` (same row shape as
+            ``asbuilt_features``, i.e. name/module/module_confidence/bits/kind/options/etc.),
+            plus, PER FEATURE, a ``matched_option`` key:
+              * for a ``full_line``-kind feature (only meaningful when ``line`` is given):
+                the option's ``meaning`` on an EXACT (not substring) case-insensitive hex
+                match against ``line``'s data+checksum bytes, or ``None`` if no option
+                matches -- NEVER a fabricated/partial guess.
+              * for a ``nibble``/``byte``-kind feature, or when ``line`` is not given:
+                always ``None`` -- the catalog only records the CHANGED field, not the
+                surrounding unchanged bytes, so decoding a specific option from a partial
+                value would be invented, not derived (mirrors the CLI's honest refusal).
+            An unknown/empty ``block_line`` degrades to ``features: []``, never raises.
+          - ``checksum``: ``None`` if ``line`` was not given; otherwise
+            ``{"valid": bool, "expected": int, "actual": int}`` from ``verify_full_line``.
+            HONESTY: a ``valid=True`` checksum means only that the trailing byte is
+            self-consistent with label+data -- it does NOT mean the value is correct for
+            the vehicle (NEEDS ON-CAR CHECK; callers must keep surfacing that caveat).
+
+        Raises ``ValueError`` if ``line`` is given but is not parseable hex (malformed
+        hex is a genuine input error, distinct from an unknown block_line, which is a
+        clean empty result) -- the HTTP layer maps this to a 400, never a 500.
+        """
+        features = features_at_block_line(block_line, FUSION_2016_ASBUILT)
+        checksum = None
+        given_data_hex = None
+        if line is not None:
+            result = verify_full_line(block_line, line)  # raises ValueError on bad hex
+            checksum = {
+                "valid": result.valid,
+                "expected": result.expected_checksum,
+                "actual": result.actual_checksum,
+            }
+            # Normalize the given line to bare uppercase hex for an EXACT comparison
+            # against each full_line option's value -- never a substring/`in` check.
+            given_data_hex = line.replace(" ", "").upper()
+
+        rows = []
+        for f in features:
+            matched_option = None
+            if given_data_hex is not None and f.kind == "full_line":
+                matched_option = next(
+                    (meaning for value, meaning in f.options if value.upper() == given_data_hex),
+                    None,
+                )
+            rows.append({
+                "key": f.key,
+                "name": f.name,
+                "module": f.module,
+                "module_addr": f.module_addr,
+                "module_confidence": f.module_confidence,
+                "block_line": f.block_line,
+                "bits": f.bits,
+                "kind": f.kind,
+                "options": list(f.options),
+                "my": f.my,
+                "verified": f.verified,
+                "note": f.note,
+                "matched_option": matched_option,
+            })
+        return {"features": rows, "checksum": checksum}
 
     @_synchronized
     def snapshot(self, read):
