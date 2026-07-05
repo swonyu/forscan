@@ -71,6 +71,17 @@ class StminTests(unittest.TestCase):
         self.assertEqual(stmin_to_seconds(0x80), 0.127)
         self.assertEqual(stmin_to_seconds(0xFF), 0.127)
 
+    def test_reserved_boundaries_adjacent_to_microsecond_window(self):
+        # ISO 15765-2 §6.5.5.5: STmin ranges 0x80..0xF0 and 0xFA..0xFF are RESERVED
+        # and must be treated as the 0x7F (127 ms) maximum. 0xF0 sits one BELOW the
+        # 0xF1..0xF9 microsecond window and 0xFA one ABOVE it — the exact off-by-one
+        # straddle for that window's bound check. Expected 0.127 s is hand-derived
+        # from the spec, NOT the code: a `0xF0 <= st` lower-bound bug would yield
+        # (0xF0-0xF0)/10000 = 0.0, and a `st <= 0xFA` upper-bound bug would yield
+        # (0xFA-0xF0)/10000 = 0.001 — both differ from the required 0.127.
+        self.assertEqual(stmin_to_seconds(0xF0), 0.127)
+        self.assertEqual(stmin_to_seconds(0xFA), 0.127)
+
 
 class SendPathTests(unittest.TestCase):
     def test_single_frame_send(self):

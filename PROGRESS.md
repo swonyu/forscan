@@ -1562,3 +1562,23 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   != [True,True,False,False]`); `mode06.py` restored byte-identical (empty diff). No `src/` change
   (code already correct); no box ticked (hardening, not a feature). Verified by RUNNING: canonical
   suite 632 → **`Ran 634 tests in 2.206s … OK`** (+2). No forbidden category, no hardware in the loop.
+- **Iter 149** — **Review-pass hardening** (no open `[ ]` box; both `[~]` remainders —
+  0.2 real vendor-`.dylib` load/on-car call, 4.2/R7 pyinstaller `.app` — are
+  [NEEDS ON-CAR CHECK]/owner-Mac-only, so per Phase 5 "shift to hardening/review"). Swept the
+  ISO-TP STmin decoder (`isotp/socket.py::stmin_to_seconds`), spec-critical ISO 15765-2 §6.5.5.5
+  math. Found a **coverage gap, not a bug**: the two RESERVED STmin ranges (0x80..0xF0 and
+  0xFA..0xFF) must clamp to the 127 ms maximum, and the microsecond window is exactly 0xF1..0xF9,
+  but the existing reserved tests pin only 0x80 and 0xFF (range interiors) — never the two values
+  IMMEDIATELY adjacent to the µs window (0xF0 just below it, 0xFA just above it), so an off-by-one
+  in the `0xF1 <= stmin <= 0xF9` bound check would slip past every test. Added 1 spec-anchored pin
+  to `tests/test_isotp_socket.py` (hand-derived from the ISO 15765-2 reserved-clamp rule, NOT from
+  the decoder): **`test_reserved_boundaries_adjacent_to_microsecond_window`** (0xF0 → 0.127,
+  0xFA → 0.127). **Positive path fired** (verbose:
+  `test_reserved_boundaries_adjacent_to_microsecond_window … ok`). Proven **non-vacuous by
+  mutation** on the real source both ways: a lower-bound off-by-one (`0xF0 <= stmin <= 0xF9`)
+  reddens 0xF0 (`AssertionError: 0.0 != 0.127`) and an upper-bound off-by-one
+  (`0xF1 <= stmin <= 0xFA`) reddens 0xFA (`0.001 != 0.127`); `socket.py` restored to HEAD
+  byte-identical (git-clean — restored via `git show HEAD:… >` redirect because `git checkout`'s
+  unlink is blocked on this FUSE mount). No `src/` change (code already correct); no box ticked
+  (hardening, not a feature). Verified by RUNNING: canonical suite 634 → **`Ran 635 tests in
+  2.190s … OK`** (+1). No forbidden category, no hardware in the loop.
