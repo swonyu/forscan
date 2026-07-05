@@ -11,9 +11,13 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
 
 ## Phase 1 — Diagnostics foundation (Tiers 0–3)
 - [x] 0.1 Transport abstraction: `CanFrame` + `Transport` ABC + `SimulatorTransport`
-- [~] 0.2 Real backends behind the same ABC — TWO built, codecs fully tested over injected ports;
-      live serial [NEEDS ON-CAR CHECK]: `SlcanTransport` (CANable-class raw CAN) + `Elm327Transport`
-      (OBDLink EX / ELM327 AT-command). Openport (J2534-on-Mac) backend still TODO.
+- [~] 0.2 Real backends behind the same ABC — TWO full transports built, codecs fully tested over
+      injected ports; live serial [NEEDS ON-CAR CHECK]: `SlcanTransport` (CANable-class raw CAN) +
+      `Elm327Transport` (OBDLink EX / ELM327 AT-command). Openport (J2534-on-Mac): raw-CAN WIRE CODEC
+      landed (iter 131, `transport/j2534.py`: `encode_can_message`/`parse_can_message`/`can_baudrate`
+      + `PROTOCOL_CAN`/`CAN_29BIT_ID`) — 4-byte big-endian ID + payload and the CAN_29BIT_ID flag,
+      hand-derived from SAE J2534-1, tested over fixtures. Still TODO: the `J2534Transport` class over
+      an injected PassThru library + the real `PassThru*` .dylib binding (ctypes) [NEEDS ON-CAR CHECK].
 - [x] 1.1a ISO-TP frame codec: SF/FF/CF/FC encode + parse (pure, hand-derived fixtures)
 - [x] 1.1b ISO-TP transport layer: `IsoTpSocket` send/recv + flow control; `SimulatedIsoTpEcu`
       (reusable simulated endpoint). BS=0 both ways; client send honours ECU block-size>0.

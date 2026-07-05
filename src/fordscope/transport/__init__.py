@@ -28,6 +28,13 @@ from .elm327 import (
     parse_response_line,
     protocol_command,
 )
+from .j2534 import (
+    encode_can_message,
+    parse_can_message,
+    can_baudrate,
+    PROTOCOL_CAN,
+    CAN_29BIT_ID,
+)
 
 __all__ = [
     "CanFrame",
@@ -50,4 +57,9 @@ __all__ = [
     "payload_line",
     "parse_response_line",
     "protocol_command",
+    "encode_can_message",
+    "parse_can_message",
+    "can_baudrate",
+    "PROTOCOL_CAN",
+    "CAN_29BIT_ID",
 ]
