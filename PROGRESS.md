@@ -16,8 +16,12 @@ labelled **[NEEDS ON-CAR CHECK]** and never counted as "working."
       `Elm327Transport` (OBDLink EX / ELM327 AT-command). Openport (J2534-on-Mac): raw-CAN WIRE CODEC
       landed (iter 131, `transport/j2534.py`: `encode_can_message`/`parse_can_message`/`can_baudrate`
       + `PROTOCOL_CAN`/`CAN_29BIT_ID`) — 4-byte big-endian ID + payload and the CAN_29BIT_ID flag,
-      hand-derived from SAE J2534-1, tested over fixtures. Still TODO: the `J2534Transport` class over
-      an injected PassThru library + the real `PassThru*` .dylib binding (ctypes) [NEEDS ON-CAR CHECK].
+      hand-derived from SAE J2534-1, tested over fixtures. `J2534Transport` class over an INJECTED
+      PassThru library landed (iter 140, `transport/j2534.py`): open→connect(raw CAN)→pass-all filter,
+      send/recv marshalling CanFrame<->PASSTHRU_MSG, transmit-loopback (TX_MSG_TYPE) + malformed-record
+      skip, disconnect-then-close with fd-release-on-error; proven full-stack (J2534→ISO-TP→OBD: SF RPM
+      + multiframe VIN) over a scripted fake, exactly as slcan/elm327. Still TODO: the real `PassThru*`
+      .dylib binding (ctypes) [NEEDS ON-CAR CHECK].
 - [x] 1.1a ISO-TP frame codec: SF/FF/CF/FC encode + parse (pure, hand-derived fixtures)
 - [x] 1.1b ISO-TP transport layer: `IsoTpSocket` send/recv + flow control; `SimulatedIsoTpEcu`
       (reusable simulated endpoint). BS=0 both ways; client send honours ECU block-size>0.
@@ -1399,3 +1403,24 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   equivalent drift-guard for `/api/*` endpoints in this repo (checked, per iter 135's note), so
   none needed fixing. Did not run `git commit`/`git add` per this iteration's instruction; changes
   left in the working tree for a host-side commit.
+- **Iter 140** (0.2 next part — `J2534Transport` class over an injected PassThru library) — the
+  J2534/Openport-on-Mac backend gains its transport class (its wire codec landed iter 131).
+  `J2534Transport` (`transport/j2534.py`) drives a duck-typed PassThru library: open→device,
+  connect(raw CAN, flags, baud)→channel, then a **pass-all filter** (the J2534 gotcha — a raw-CAN
+  channel receives NOTHING until at least one filter is armed; zero mask + zero pattern admits every
+  ID). `send` marshals CanFrame→PASSTHRU_MSG via `encode_can_message` (TxFlags carries CAN_29BIT_ID for
+  an extended ID); `recv` parses via `parse_can_message`, **drops transmit-loopback echoes** (RxStatus
+  TX_MSG_TYPE=0x1 — else the stack would hear its own sends as replies) and skips malformed records,
+  buffering a multi-message read batch across recv calls; `close` disconnects the channel then closes the
+  device, releasing the device even if disconnect raises (adapter yanked). New `PassThruMsg` record +
+  `TX_MSG_TYPE`/`PASS_FILTER` constants (spec values). The real `PassThru*` .dylib ctypes binding stays
+  the ONLY remaining TODO and is **[NEEDS ON-CAR CHECK]** — no hardware is in this loop.
+  **Test-first, hand-derived** (IDs/payloads reuse the codec's independently hand-derived fixtures; the
+  RPM/VIN byte blobs match the slcan e2e's independent derivation): +19 tests — open sequence + pass-all
+  filter, MS-CAN baud→connect, send std/ext marshalling, recv std/ext, loopback-skip (positive reply
+  returned, loopback dropped) + lone-loopback→None + malformed-skip, not-open guards, close/disconnect +
+  close-survives-disconnect-raise + context manager, and 3 full-stack e2e (SF RPM=1000 rpm, multiframe
+  VIN `1FMHK8D89ABA12345`, silent-bus→clean ObdError). Verified by RUNNING: targeted module 35 green with
+  every new positive path firing in the `-v` output, then the canonical suite: baseline 575 →
+  **`Ran 594 tests in 2.062s … OK`**. No forbidden category touched (raw-CAN pipe, same tier as
+  slcan/elm327; no SecurityAccess crack, no emissions/immobilizer, no real-vehicle I/O).
