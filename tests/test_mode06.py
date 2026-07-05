@@ -36,6 +36,43 @@ class Mode06DecodeTests(unittest.TestCase):
         data = bytes([0x21, 0x80, 0x01, 0x00, 100, 0x00, 50, 0x00, 200]) + bytes([0x22, 0x81, 0x01])
         self.assertEqual(len(decode_monitor_tests(data)), 1)
 
+    def test_decode_16bit_fields_big_endian_high_byte(self):
+        # ISO 15031-5 record: MID,TID,UASID, value(2), min(2), max(2) — each 16-bit
+        # field is BIG-ENDIAN (high byte first). Hand-derived so the HIGH byte is
+        # non-zero and the low byte is distinct, so a dropped/swapped byte is caught
+        # (every other Mode 06 fixture keeps value/limits < 256, hiding this).
+        #   value 0x0201 = 513 (drop-high -> 1, byte-swap -> 0x0102 = 258)
+        #   min   0x0100 = 256 (drop-high -> 0)
+        #   max   0x0302 = 770
+        data = bytes([0x21, 0x80, 0x01, 0x02, 0x01, 0x01, 0x00, 0x03, 0x02])
+        t = decode_monitor_tests(data)[0]
+        self.assertEqual(t.value, 513)
+        self.assertEqual(t.min_limit, 256)
+        self.assertEqual(t.max_limit, 770)
+        self.assertTrue(t.passed)  # 256 <= 513 <= 770
+
+    def test_pass_fail_inclusive_of_limits(self):
+        # ISO 15031-5 pass criterion: test value within [min, max] INCLUSIVE — the
+        # limit is the edge of the acceptable range, so a value EQUAL to a limit
+        # passes; only value < min or value > max fails. High bytes non-zero so the
+        # boundary math isn't a low-byte-only accident. Hand-derived, straddling both
+        # edges (a strict `<`/`>` at either bound reddens exactly one verdict):
+        #   value == min -> PASS,  value == max -> PASS,
+        #   value == min-1 -> FAIL, value == max+1 -> FAIL
+        def _rec(mid, value, lo, hi):
+            return bytes([mid, 0x80, 0x01,
+                          value >> 8, value & 0xFF,
+                          lo >> 8, lo & 0xFF,
+                          hi >> 8, hi & 0xFF])
+        data = (
+            _rec(0x21, 512, 512, 768)   # value == min      -> PASS
+            + _rec(0x22, 768, 256, 768)  # value == max      -> PASS
+            + _rec(0x31, 511, 512, 768)  # value == min - 1  -> FAIL
+            + _rec(0x32, 769, 256, 768)  # value == max + 1  -> FAIL
+        )
+        verdicts = [t.passed for t in decode_monitor_tests(data)]
+        self.assertEqual(verdicts, [True, True, False, False])
+
 
 class Mode06ClientTests(unittest.TestCase):
     def test_single_record_value_limits_and_pass(self):

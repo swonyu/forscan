@@ -1540,3 +1540,25 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   was restored byte-identical. No `src/` change (code already correct); no box ticked (hardening,
   not a feature). Verified by RUNNING: canonical suite 630 → **`Ran 632 tests in 2.181s … OK`**
   (+2). No forbidden category, no hardware in the loop.
+- **Iter 148** — **Review-pass hardening** (no open `[ ]` box; both `[~]` remainders —
+  0.2 real vendor-`.dylib` load/on-car call, 4.2/R7 pyinstaller `.app` — are
+  [NEEDS ON-CAR CHECK]/owner-Mac-only, so per Phase 5 "shift to hardening/review"). Swept the
+  Mode 06 on-board-monitoring decoder (`obd/mode06.py`), spec-critical SAE J1979 / ISO 15031-5
+  math. Found **two coverage gaps, not bugs**: (1) the three value/min/max fields are 16-bit
+  **BIG-ENDIAN** `(hi<<8)|lo`, but EVERY existing fixture keeps value/limits < 256 (high byte
+  0x00) — so a dropped-high-byte or byte-swapped decode would slip past every test; and (2)
+  `MonitorTest.passed` is the INCLUSIVE range `min<=value<=max`, yet the tests covered only an
+  interior pass (100 in [50,200]) and a far fail (250>200) — never `value==min`, `value==max`,
+  or ±1, so a strict `<`/`>` at either bound was unpinned. Added 2 spec-anchored pins to
+  `tests/test_mode06.py` (hand-derived from the ISO 15031-5 record layout + the inclusive-limit
+  pass criterion, NOT from the decoder): **`test_decode_16bit_fields_big_endian_high_byte`**
+  (value 0x0201=513 / min 0x0100=256 / max 0x0302=770 — all high bytes non-zero, low bytes
+  distinct so drop/swap is caught) and **`test_pass_fail_inclusive_of_limits`** (value==min→PASS,
+  value==max→PASS, value==min-1→FAIL, value==max+1→FAIL → verdicts [True,True,False,False], high
+  bytes non-zero). **Positive paths fired** (verbose: `test_decode_16bit_fields_big_endian_high_byte
+  … ok`, `test_pass_fail_inclusive_of_limits … ok`). Proven **non-vacuous by mutation**: a
+  drop-high-byte decoder (`value=r[4]`) reddens the decode pin (`AssertionError: 1 != 513`); a
+  strict-boundary `passed` (`min<value<max`) reddens the boundary pin (`[False,False,False,False]
+  != [True,True,False,False]`); `mode06.py` restored byte-identical (empty diff). No `src/` change
+  (code already correct); no box ticked (hardening, not a feature). Verified by RUNNING: canonical
+  suite 632 → **`Ran 634 tests in 2.206s … OK`** (+2). No forbidden category, no hardware in the loop.
