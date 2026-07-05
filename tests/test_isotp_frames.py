@@ -51,6 +51,29 @@ class SingleFrameTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_isotp(bytes([0x00, 0, 0, 0, 0, 0, 0, 0]))
 
+    def test_parse_rejects_sf_length_above_max(self):
+        # SF low nibble is the data length; ISO 15765-2 classic SF carries 1..7
+        # bytes, so a declared length of 8..15 is malformed and must be rejected
+        # (the upper-bound sibling of the pinned length-0 escape guard). Straddle:
+        # nibble 7 is the largest that parses, and it yields exactly its 7 bytes.
+        ok = parse_isotp(bytes([0x07, 1, 2, 3, 4, 5, 6, 7]))
+        self.assertIs(ok.type, IsoTpFrameType.SINGLE)
+        self.assertEqual(ok.data, bytes([1, 2, 3, 4, 5, 6, 7]))  # 7 == SF_MAX_DATA
+        with self.assertRaises(ValueError):
+            parse_isotp(bytes([0x08, 1, 2, 3, 4, 5, 6, 7]))  # 8 == one past max
+        with self.assertRaises(ValueError):
+            parse_isotp(bytes([0x0F, 1, 2, 3, 4, 5, 6, 7]))  # 15 == nibble ceiling
+
+    def test_parse_rejects_sf_truncated_short_data(self):
+        # An SF whose payload holds fewer data bytes than its declared length is
+        # truncated and must raise (the SF analogue of the pinned FF
+        # short-first-data guard), never silently return fewer bytes than declared.
+        # Straddle: the same declared length with all 5 bytes present parses.
+        ok = parse_isotp(bytes([0x05, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE]))
+        self.assertEqual(ok.data, bytes([0xAA, 0xBB, 0xCC, 0xDD, 0xEE]))
+        with self.assertRaises(ValueError):
+            parse_isotp(bytes([0x05, 0xAA, 0xBB]))  # declares 5, only 2 present
+
 
 class FirstFrameTests(unittest.TestCase):
     def test_encode_length_split_across_nibble_and_byte(self):
@@ -162,6 +185,15 @@ class PciTypeTests(unittest.TestCase):
     def test_empty_payload_raises(self):
         with self.assertRaises(ValueError):
             pci_type(b"")
+
+    def test_unknown_pci_nibble_raises(self):
+        # Only high nibbles 0..3 are defined ISO-TP frame types (SF/FF/CF/FC);
+        # a byte-0 high nibble of 4..15 is unknown and must raise, not be
+        # misclassified into a bogus frame. Checked via pci_type and parse_isotp.
+        with self.assertRaises(ValueError):
+            pci_type(bytes([0x40, 0, 0]))
+        with self.assertRaises(ValueError):
+            parse_isotp(bytes([0xF0, 0, 0]))
 
 
 if __name__ == "__main__":

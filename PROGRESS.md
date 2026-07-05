@@ -1485,3 +1485,20 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   by RUNNING: 4 new positives fired in `-v`; canonical suite 622 → **`Ran 626 tests in 2.251s … OK`**.
   Still TODO on 0.2 (unchanged): loading the REAL vendor `.dylib` + calling on live hardware —
   [NEEDS ON-CAR CHECK]. No forbidden category (same raw-CAN diagnostic tier as slcan/elm327).
+- **Iter 145** — **Review-pass hardening** (no open `[ ]` box; both `[~]` remainders are
+  [NEEDS ON-CAR CHECK]/owner-Mac build, so per Phase 5 "shift to hardening/review" + the
+  `fordscope-code-review` skill's **Parser bound/length checks** bug class). Adversarially swept
+  the newest backend (`transport/j2534.py`) — thoroughly pinned already — then the ISO-TP frame
+  codec (`isotp/frames.py`), the parser of untrusted CAN bytes where the repo's worst parser bug
+  shipped. Found a **coverage gap, not a bug**: the SF/PCI malformed-input guards were unpinned
+  while their FF analogues (`test_parse_rejects_truncated_ff_short_first_data`) were pinned. Added
+  3 spec-derived pins to `tests/test_isotp_frames.py` (ISO 15765-2, hand-derived — NOT from the
+  code): (1) SF low-nibble length 8..15 rejected, straddle nibble **7 parses to exactly its 7
+  bytes**; (2) SF truncated (declares 5, only 2 present) rejected, straddle **full 5-byte SF
+  parses to 5 bytes**; (3) unknown PCI high-nibble 4/15 rejected via `pci_type` + `parse_isotp`.
+  **Positive paths fired** (verbose run: the two data-equality asserts executed green). Pins proven
+  **non-vacuous by mutation**: deleting the SF truncation guard in-memory makes the parser silently
+  accept the truncated SF (`data=aabb`, 2 bytes, declared 5) → the pin reddens; committed source
+  correctly raises. No `src/` change (code was already correct); no box ticked (hardening, not a
+  feature). Verified by RUNNING: canonical suite 626 → **`Ran 629 tests in 2.060s … OK`** (+3). No
+  forbidden category, no hardware in the loop.
