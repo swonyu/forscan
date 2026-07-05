@@ -1019,7 +1019,14 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   "integration composition individual layer tests miss" class as the elm327 end-to-end thread — the
   split-across-reads variant was the untested one, and it's exactly what happens reading a VIN / long
   As-Built block over a real adapter. +1 test → **447 green**.
-- **Iter 89** (docs, maintenance) — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
+- **Iter 130** (multiframe read survives interleaved bus traffic — the live-bus arrival pattern) — Third
+  in the "untested ARRIVAL PATTERNS, not just untested inputs" thread. A live CAN bus chatters constantly
+  (PCM/ABS/BCM), so in raw ELM327 mode the adapter can surface frames from OTHER arbitration IDs
+  interleaved with our module's response — including BETWEEN the FF and the CFs while we wait. ISO-TP's
+  `_recv_matching` must skip the non-matching IDs and reassemble only ours. Confirmed by measurement (VIN
+  reassembles byte-exact with a 0x7DF noise frame injected before the CFs), then locked
+  `test_multiframe_read_survives_interleaved_bus_traffic`. The composition (elm327 per-`>`-block buffering
+  × isotp skip-non-matching) was untested end-to-end. +1 test → **448 green**. — Fixed a materially-stale/inaccurate `docs/DESIGN.md`: §3
   listed a **non-existent `OpenportTransport` (Tactrix)** and OMITTED the real `Elm327Transport`
   (the ELM327/OBDLink/vLinker-FS backend the tool actually ships), and §4 had **no Phase 4** (the
   whole native-macOS web app). Corrected the layer diagram (real backends, webapp top layer, the

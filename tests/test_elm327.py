@@ -281,6 +281,42 @@ class Elm327EndToEndReadTests(unittest.TestCase):
         obd = ObdClient(IsoTpSocket(t, tx_id=0x7E0, rx_id=0x7E8))
         self.assertEqual(obd.read_vin(), "1FMHK8D89ABA12345")
 
+    def test_multiframe_read_survives_interleaved_bus_traffic(self):
+        # A live CAN bus chatters constantly (PCM/ABS/BCM), so in raw mode the adapter can
+        # surface frames from OTHER arbitration IDs interleaved with our module's response
+        # -- including BETWEEN the FF and the CFs while we wait. ISO-TP's _recv_matching must
+        # skip the non-matching IDs and reassemble only ours, byte-exact. (This composition
+        # -- elm327 per-block buffering x isotp skip-non-matching -- was untested end-to-end.)
+        class NoisyBusPort:
+            def __init__(self):
+                self._blocks = []
+                self._writes = 0
+
+            def write(self, data):
+                text = bytes(data).decode("ascii", "ignore").strip()
+                if text and not text.upper().startswith("AT"):
+                    self._writes += 1
+                    if self._writes == 1:              # request -> FF
+                        self._blocks.append("7E8 10 14 49 02 01 31 46 4D")
+                    else:                              # flow control -> noise 0x7DF, then CF1, CF2
+                        self._blocks.append(
+                            "7DF 02 01 00 00 00 00 00\r"
+                            "7E8 21 48 4B 38 44 38 39 41\r"
+                            "7E8 22 42 41 31 32 33 34 35"
+                        )
+                return len(data)
+
+            def read(self, n=1):
+                return (self._blocks.pop(0) + "\r>").encode("ascii") if self._blocks else b">"
+
+            def close(self):
+                pass
+
+        t = Elm327Transport(NoisyBusPort())
+        t.open()
+        obd = ObdClient(IsoTpSocket(t, tx_id=0x7E0, rx_id=0x7E8))
+        self.assertEqual(obd.read_vin(), "1FMHK8D89ABA12345")
+
     def test_no_data_surfaces_clean_error_not_a_hang(self):
         # The #1 real-world event on a live car: query an unsupported PID and the
         # adapter replies "NO DATA". The full stack (elm327 recognizes the status
