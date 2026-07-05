@@ -11,6 +11,13 @@ green check, the layered architecture, and the hard boundaries. Quick summary:
   claim behavior without it.
 - **Loop:** read `PROGRESS.md` → next unchecked box → test-first → run suite green → update
   `PROGRESS.md` → commit. One green suite + one commit per iteration.
+- **Committing on the sandbox mount — `unlink` is BLOCKED (host-side FUSE limit):** git
+  cannot delete its own `.git/index.lock`, so a stale lock makes `git add`/`git commit`
+  fail with `Unable to create '.git/index.lock': File exists` (exit 128). **Never `rm` a
+  `.git` lock here — it's blocked.** Commit via **`tools/safe-commit.sh -F <msgfile>`**
+  (add `--push` to push), which clears stale locks by RENAME first. By hand, clear with
+  `mv .git/index.lock .git/.orphan-locks/…` (rename), never `rm`. This is a WORKAROUND;
+  the real fix is host-side (a filesystem where unlink works). See the script header.
 - **Honesty:** no car is in the loop; simulation passing ≠ works on a vehicle. Label
   hardware-only behavior `NEEDS ON-CAR CHECK`. Fixtures are hand-derived from the SAE/ISO
   specs, never from the code under test; never fix a contract test by editing the assertion.
