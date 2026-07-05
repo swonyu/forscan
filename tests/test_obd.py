@@ -185,6 +185,22 @@ class DtcCodecTests(unittest.TestCase):
         self.assertTrue(decode_dtc(0x80, 0x00).startswith("B"))
         self.assertTrue(decode_dtc(0xC0, 0x00).startswith("U"))
 
+    def test_decode_full_string_nonP_families_and_hex_digits(self):
+        # Spec-anchored (SAE J2012 / ISO 15031-6) FULL-STRING decodes for the
+        # C/B/U families with a NON-ZERO first digit and a hex second digit. The
+        # existing tests only pin the letter (.startswith) using bytes whose
+        # first-digit bits are 0 (0x00/0x40/0x80/0xC0), so the 2-bit first-digit
+        # mask `(a>>4)&0x03` — where the letter bits must NOT leak into the digit
+        # — and hex-nibble formatting were unpinned for non-P codes. Each byte
+        # pair is hand-derived from the bit layout, NOT read from the decoder:
+        #   byteA = [b7-6 letter][b5-4 digit1][b3-0 digit2];  byteB = [digit3][digit4]
+        # C2B07: 01|10|1011 / 0000|0111 -> 0x6B,0x07  (d1=2 straddles the mask; d2=B hex)
+        self.assertEqual(decode_dtc(0x6B, 0x07), "C2B07")
+        # B3C29: 10|11|1100 / 0010|1001 -> 0xBC,0x29  (d1=3 straddles the mask; d2=C hex)
+        self.assertEqual(decode_dtc(0xBC, 0x29), "B3C29")
+        # U1A3F: 11|01|1010 / 0011|1111 -> 0xDA,0x3F  (d1=1; d2=A and d4=F hex nibbles)
+        self.assertEqual(decode_dtc(0xDA, 0x3F), "U1A3F")
+
     def test_encode_roundtrip(self):
         for code in ("P0143", "C0196", "B1234", "U0100"):
             self.assertEqual(decode_dtc(*encode_dtc(code)), code)

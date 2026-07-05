@@ -1502,3 +1502,21 @@ NEXT: the owed R3/R5 research re-run (blocked features) + R4 — feature work, n
   correctly raises. No `src/` change (code was already correct); no box ticked (hardening, not a
   feature). Verified by RUNNING: canonical suite 626 → **`Ran 629 tests in 2.060s … OK`** (+3). No
   forbidden category, no hardware in the loop.
+- **Iter 146** — **Review-pass hardening** (no open `[ ]` box; both `[~]` remainders —
+  0.2 real vendor-`.dylib` load/on-car call, 4.2/R7 pyinstaller `.app` — are
+  [NEEDS ON-CAR CHECK]/owner-Mac-only, so per Phase 5 "shift to hardening/review"). Swept the
+  DTC codec (`obd/pids.py::decode_dtc`), spec-critical SAE J2012 / ISO 15031-6 bit math. Found a
+  **coverage gap, not a bug**: `decode_dtc` was pinned absolutely only for **P0143** (letter P,
+  first-digit 0); the C/B/U families were checked by `.startswith(letter)` alone, using bytes
+  (0x00/0x40/0x80/0xC0) whose first-digit bits are all 0 — so the **2-bit first-digit mask
+  `(a>>4)&0x03`** (the letter bits must NOT leak into the digit) and the **hex-nibble formatting**
+  were unpinned for non-P codes, and the existing round-trip test is mutual-inverse (can't catch a
+  compensating encode+decode bug). Added 3 full-string, spec-anchored pins to `tests/test_obd.py`
+  (hand-derived from the bit layout, NOT from the decoder): **C2B07** (0x6B,0x07; d1=2), **B3C29**
+  (0xBC,0x29; d1=3), **U1A3F** (0xDA,0x3F; d1=1, hex d2=A/d4=F). Each first digit is non-zero so it
+  **straddles the mask bug**. **Positive paths fired** (verbose run:
+  `test_decode_full_string_nonP_families_and_hex_digits … ok`). Proven **non-vacuous by mutation**:
+  a `(a>>4)&0x0F` variant yields C6B07 / B11C29 / U13A3F ≠ the pinned values, so every pin reddens
+  under the mask bug while the committed decoder stays correct. No `src/` change (code already
+  correct); no box ticked (hardening, not a feature). Verified by RUNNING: canonical suite 629 →
+  **`Ran 630 tests in 2.190s … OK`** (+1). No forbidden category, no hardware in the loop.
